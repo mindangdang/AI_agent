@@ -1,4 +1,5 @@
-selenium
+playwright
+playwright-stealth
 google-generativeai
 pillow
 requests

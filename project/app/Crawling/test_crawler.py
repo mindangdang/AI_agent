@@ -1,58 +1,65 @@
 import json
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 
-# 앞서 만든 크롤러 파일(instagram_crawler.py)에서 필요한 함수들을 불러옵니다.
-from instagram_crawler import (
-    build_chrome_stealth_args,
-    apply_runtime_stealth,
-    crawl_instagram_post
-)
+# 방금 만든 모듈에서 함수를 불러옵니다!
+from instagram_crawler_pw import crawl_instagram_post
 
 def main():
-    # 1. 크롤링을 테스트할 실제 인스타그램 게시물 URL을 넣어주세요!
-    test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==" 
+    test_url = "https://www.instagram.com/p/DNSF5jryTof/"
     
-    # 2. 스텔스 옵션 생성 및 적용
-    # 2. 스텔스 옵션 생성 및 적용
-    options = Options()
-    chrome_args = build_chrome_stealth_args(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    
-    for arg in chrome_args:
-        options.add_argument(arg)
-        
-    # 👇👇 리눅스 서버 크래시 방지를 위한 필수 옵션 2개 강제 추가! 👇👇
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-software-rasterizer")
-    
-    # ❌ 절대 주석을 풀지 마세요! (코드스페이스에서는 화면을 띄울 수 없습니다)
-    # options.arguments.remove("--headless=new")
+    # 🔥 브라우저에서 복사한 sessionid 값을 여기에 넣으세요!
+    SESSION_ID = "여기에_복사한_sessionid를_붙여넣으세요"
 
-    driver = None
-    try:
-        print("🚀 크롬 브라우저를 시작합니다...")
-        driver = webdriver.Chrome(options=options)
+    with sync_playwright() as p:
+        print("🚀 Playwright 브라우저 시작...")
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-gpu", 
+                "--no-sandbox", 
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled"
+            ]
+        )
         
-        # 3. 봇 탐지 우회(Stealth) 스크립트 주입
-        apply_runtime_stealth(driver)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            locale="ko-KR",
+            viewport={"width": 1280, "height": 1024}
+        )
+
+        # 🍪 쿠키 주입
+        if SESSION_ID != "여기에_복사한_sessionid를_붙여넣으세요":
+            context.add_cookies([{
+                "name": "sessionid",
+                "value": SESSION_ID,
+                "domain": ".instagram.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True
+            }])
+            print("🍪 세션 쿠키가 성공적으로 주입되었습니다.")
+        else:
+            print("⚠️ 경고: sessionid가 설정되지 않았습니다. 차단될 확률이 높습니다.")
+
+        page = context.new_page()
+        stealth_sync(page)
+
+        print(f"🔍 [{test_url}] 데이터 수집 중...")
         
-        # 4. 본격적인 크롤링 시작
-        print(f"🔍 [{test_url}] 데이터 수집 중... (최대 12초 대기)")
-        result = crawl_instagram_post(driver, test_url)
-        
-        # 5. 결과물을 보기 좋게 출력
+        # 분리해둔 함수를 여기서 사용합니다.
+        result = crawl_instagram_post(page, test_url)
+
         print("\n✅ 크롤링 결과:")
         print(json.dumps(result, indent=4, ensure_ascii=False))
-        
-    except Exception as e:
-        print(f"❌ 실행 중 오류 발생: {e}")
-    finally:
-        # 6. 작업이 끝나면 메모리 누수 방지를 위해 브라우저를 반드시 종료합니다.
-        if driver:
-            driver.quit()
-            print("\n🛑 브라우저를 안전하게 종료했습니다.")
+
+        if not result["error"]:
+            page.screenshot(path="success.png")
+            print("📸 성공 화면을 'success.png'로 저장했습니다.")
+
+        browser.close()
+        print("\n🛑 브라우저를 안전하게 종료했습니다.")
 
 if __name__ == "__main__":
     main()
