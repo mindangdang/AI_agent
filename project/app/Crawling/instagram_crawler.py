@@ -52,13 +52,18 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
 
         # 1. 본문(Caption) 추출
         for selector in CAPTION_CANDIDATES:
-            element = page.locator(selector).first
-            if element.is_visible():
-                text = element.inner_text().strip()
-                if text and not text.startswith("#"):
-                    result["caption"] = text
-                    result["hashtags"] = HASHTAG_PATTERN.findall(text)
-                    break
+            # first 대신 all()로 해당되는 요소들을 전부 가져옵니다.
+            elements = page.locator(selector).all()
+            for element in elements:
+                if element.is_visible():
+                    text = element.inner_text().strip()
+                    # 💡 텍스트가 존재하고, 단순 아이디(길이 15자 이하 등)가 아닌 '진짜 본문'일 때만 저장
+                    if text and not text.startswith("#") and len(text) > 15:
+                        result["caption"] = text
+                        result["hashtags"] = HASHTAG_PATTERN.findall(text)
+                        break
+            if result["caption"]: # 본문을 찾았으면 바깥 반복문도 종료
+                break
 
         # 2. 미디어(이미지/비디오) 추출
         all_images = []
