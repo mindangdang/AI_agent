@@ -1,6 +1,5 @@
 import json
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth
 
 # 방금 만든 모듈에서 함수를 불러옵니다!
 from instagram_crawler import crawl_instagram_post
@@ -8,18 +7,19 @@ from instagram_crawler import crawl_instagram_post
 def main():
     test_url = "https://www.instagram.com/p/DNSF5jryTof/"
     
-    # 🔥 브라우저에서 복사한 sessionid 값을 여기에 넣으세요!
-    SESSION_ID = "여기에_복사한_sessionid를_붙여넣으세요"
+    SESSION_ID = "66800932735%3AkVPzTn1cdOCvwk%3A21%3AAYifS7X9eYVuTGD36Dxeoihm_bnJu2Npi8xzz1MIUw"
 
     with sync_playwright() as p:
         print("🚀 Playwright 브라우저 시작...")
+        
+        # 스텔스 모드의 핵심 옵션들
         browser = p.chromium.launch(
             headless=True,
             args=[
                 "--disable-gpu", 
                 "--no-sandbox", 
                 "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled"
+                "--disable-blink-features=AutomationControlled" # 자동화 도구 탐지 방지
             ]
         )
         
@@ -29,8 +29,8 @@ def main():
             viewport={"width": 1280, "height": 1024}
         )
 
-        # 🍪 쿠키 주입
-        if SESSION_ID != "66800932735%3AkVPzTn1cdOCvwk%3A21%3AAYifS7X9eYVuTGD36Dxeoihm_bnJu2Npi8xzz1MIUw":
+        # 🍪 정상적인 쿠키 주입 로직
+        if SESSION_ID:
             context.add_cookies([{
                 "name": "sessionid",
                 "value": SESSION_ID,
@@ -41,10 +41,12 @@ def main():
             }])
             print("🍪 세션 쿠키가 성공적으로 주입되었습니다.")
         else:
-            print("⚠️ 경고: sessionid가 설정되지 않았습니다. 차단될 확률이 높습니다.")
+            print("⚠️ 경고: sessionid가 설정되지 않았습니다.")
 
         page = context.new_page()
-        stealth(page)
+        
+        # 🌟 말썽 피우는 playwright-stealth 대신, 가장 확실한 네이티브 스텔스 코드 주입!
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
         print(f"🔍 [{test_url}] 데이터 수집 중...")
         
