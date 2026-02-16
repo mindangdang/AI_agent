@@ -1,9 +1,9 @@
 import json
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+from playwright_stealth import stealth
 
 # 방금 만든 모듈에서 함수를 불러옵니다!
-from instagram_crawler_pw import crawl_instagram_post
+from instagram_crawler import crawl_instagram_post
 
 def main():
     test_url = "https://www.instagram.com/p/DNSF5jryTof/"
@@ -44,7 +44,7 @@ def main():
             print("⚠️ 경고: sessionid가 설정되지 않았습니다. 차단될 확률이 높습니다.")
 
         page = context.new_page()
-        stealth_sync(page)
+        stealth(page)
 
         print(f"🔍 [{test_url}] 데이터 수집 중...")
         
