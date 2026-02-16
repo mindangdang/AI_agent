@@ -7,8 +7,6 @@ logger = logging.getLogger(__name__)
 
 # --- 정규식 및 선택자 ---
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([^\s#.,!?;:]+)")
-# 🎯 [수정됨] 다시 article과 main 둘 다 찾도록 복구했습니다!
-ARTICLE_SELECTOR = "article, main" 
 VIDEO_SELECTOR = "video"
 NEXT_BUTTON_SELECTOR = "button[aria-label*='Next'], button[aria-label*='다음'], div[role='button'] svg[aria-label='다음']"
 
@@ -35,8 +33,8 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
         page.goto(post_url, wait_until="domcontentloaded")
         
         try:
-            # 여기서 article이나 main 태그가 뜰 때까지 대기
-            page.wait_for_selector(ARTICLE_SELECTOR, timeout=15000)
+            # 로딩 대기: article이나 main 태그가 화면에 나타날 때까지 기다림
+            page.wait_for_selector("article, main", timeout=15000)
         except PlaywrightTimeoutError:
             page_text = page.content().lower()
             if "login" in page.url or "로그인" in page_text:
@@ -47,8 +45,13 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 result["error"] = "접근이 차단되었거나 페이지 구조가 변경되었습니다."
             return result
 
-        # 탐색 범위를 메인 게시물 박스로 좁힘
-        post_container = page.locator(ARTICLE_SELECTOR).first
+        # 🎯 핵심 수정 포인트: 탐색 구역을 엄격하게 제한!
+        # 1순위: article 태그가 있으면 무조건 그것만 게시물 박스로 잡음
+        if page.locator("article").count() > 0:
+            post_container = page.locator("article").first
+        # 2순위: article이 진짜 없다면, main 아래의 첫 번째 구역만 잡음 (추천 게시물 방어)
+        else:
+            post_container = page.locator("main > div").first
 
         # 1. 본문(Caption) 추출
         for selector in CAPTION_CANDIDATES:
@@ -56,7 +59,7 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
             for element in elements:
                 if element.is_visible():
                     text = element.inner_text().strip()
-                    # 아이디가 아닌 진짜 본문(15자 이상)인지 확인
+                    # 본문 검증 (15자 이상)
                     if text and not text.startswith("#") and len(text) > 15:
                         result["caption"] = text
                         result["hashtags"] = HASHTAG_PATTERN.findall(text)
@@ -74,7 +77,7 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
             if post_container.locator(VIDEO_SELECTOR).count() > 0:
                 is_video = True
             
-            # 게시물 박스 안의 이미지 요소들의 src 주소만 싹 가져옴
+            # 좁혀진 게시물 박스 안에서만 이미지를 찾음
             images = post_container.locator("img").evaluate_all(
                 "elements => elements.map(e => e.src)"
             )
@@ -82,13 +85,13 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
             for src in images:
                 if not src: continue
                 is_cdn = "cdninstagram.com" in src or "fbcdn.net" in src
-                # 🎯 150x150 (프로필 해상도) 또는 profile_pic 단어가 들어간 URL 제외!
+                # 프로필 사진 필터링
                 is_profile = "150x150" in src or "profile_pic" in src
                 
                 if is_cdn and not is_profile:
                     all_images.append(src)
 
-            # 다음 버튼 클릭
+            # 다음 버튼 클릭 (마찬가지로 게시물 박스 안에서만 찾음)
             next_btn = post_container.locator(NEXT_BUTTON_SELECTOR).first
             if next_btn.is_visible():
                 next_btn.click()
