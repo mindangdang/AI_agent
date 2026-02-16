@@ -5,14 +5,13 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 logger = logging.getLogger(__name__)
 
-# --- 정규식 및 선택자 (인스타그램 최신 DOM 구조에 맞게 수정!) ---
+# --- 정규식 및 선택자 ---
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([^\s#.,!?;:]+)")
-ARTICLE_SELECTOR = "article, main" # article이 없으면 main 태그라도 찾도록 변경
-MEDIA_IMAGE_SELECTOR = "img[style*='object-fit'], img[crossorigin='anonymous']" # 더 넓은 범위의 이미지 찾기
+ARTICLE_SELECTOR = "article"
 VIDEO_SELECTOR = "video"
+# 다음 버튼 선택자 (다양한 형태 대비)
 NEXT_BUTTON_SELECTOR = "button[aria-label*='Next'], button[aria-label*='다음'], div[role='button'] svg[aria-label='다음']"
 
-# 본문 텍스트를 찾는 후보군 (앞에 붙었던 article 뺌)
 CAPTION_CANDIDATES = [
     "h1",
     "div._a9zs", 
@@ -36,7 +35,6 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
         page.goto(post_url, wait_until="domcontentloaded")
         
         try:
-            # 코드스페이스 환경을 고려해 대기 시간을 15초로 넉넉하게 늘림
             page.wait_for_selector(ARTICLE_SELECTOR, timeout=15000)
         except PlaywrightTimeoutError:
             page_text = page.content().lower()
@@ -46,23 +44,25 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
             else:
                 result["blocked"] = True
                 result["error"] = "접근이 차단되었거나 페이지 구조가 변경되었습니다."
-            
-            page.screenshot(path="error_screenshot.png")
             return result
 
-        # 1. 본문(Caption) 추출
+        # 🎯 핵심 1: 화면 전체가 아닌, '첫 번째 게시물 박스'로 탐색 범위를 좁힙니다.
+        post_container = page.locator(ARTICLE_SELECTOR).first
+        if not post_container.is_visible():
+            post_container = page.locator("main").first # 혹시 모를 대체제
+
+        # 1. 본문(Caption) 추출 (게시물 박스 안에서만 검색)
         for selector in CAPTION_CANDIDATES:
-            # first 대신 all()로 해당되는 요소들을 전부 가져옵니다.
-            elements = page.locator(selector).all()
+            elements = post_container.locator(selector).all()
             for element in elements:
                 if element.is_visible():
                     text = element.inner_text().strip()
-                    # 💡 텍스트가 존재하고, 단순 아이디(길이 15자 이하 등)가 아닌 '진짜 본문'일 때만 저장
+                    # 아이디가 아닌 '진짜 본문(15자 이상)'인지 확인
                     if text and not text.startswith("#") and len(text) > 15:
                         result["caption"] = text
                         result["hashtags"] = HASHTAG_PATTERN.findall(text)
                         break
-            if result["caption"]: # 본문을 찾았으면 바깥 반복문도 종료
+            if result["caption"]:
                 break
 
         # 2. 미디어(이미지/비디오) 추출
@@ -70,27 +70,35 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
         is_video = False
 
         for _ in range(max_slides):
-            # 화면이 살짝 로드될 시간을 줌
             page.wait_for_timeout(500)
             
-            if page.locator(VIDEO_SELECTOR).count() > 0:
+            if post_container.locator(VIDEO_SELECTOR).count() > 0:
                 is_video = True
             
-            images = page.locator(MEDIA_IMAGE_SELECTOR).evaluate_all(
+            # 게시물 박스 안의 모든 이미지를 가져옴
+            images = post_container.locator("img").evaluate_all(
                 "elements => elements.map(e => e.src)"
             )
-            # 인스타그램 이미지 링크만 걸러내기
-            valid_images = [src for src in images if "cdninstagram.com" in src or "fbcdn.net" in src]
-            all_images.extend(valid_images)
+            
+            # 🎯 핵심 2: 프로필 사진 및 불필요한 이미지 솎아내기
+            for src in images:
+                if not src: continue
+                is_cdn = "cdninstagram.com" in src or "fbcdn.net" in src
+                # URL에 150x150 이나 profile_pic이 들어가면 프로필 사진이므로 제외!
+                is_profile = "150x150" in src or "profile_pic" in src
+                
+                if is_cdn and not is_profile:
+                    all_images.append(src)
 
-            # 다음 슬라이드 버튼 클릭
-            next_btn = page.locator(NEXT_BUTTON_SELECTOR).first
+            # 다음 버튼도 게시물 박스 안에서만 찾아서 클릭
+            next_btn = post_container.locator(NEXT_BUTTON_SELECTOR).first
             if next_btn.is_visible():
                 next_btn.click()
-                page.wait_for_timeout(1000) # 슬라이드 넘어가는 애니메이션 대기
+                page.wait_for_timeout(1000)
             else:
                 break
 
+        # 중복 제거 후 순서 유지
         result["image_urls"] = list(dict.fromkeys(all_images))
 
         if is_video:
@@ -101,6 +109,5 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
     except Exception as e:
         logger.exception(f"크롤링 중 예외 발생: {e}")
         result["error"] = str(e)
-        page.screenshot(path="exception_screenshot.png")
 
     return result
