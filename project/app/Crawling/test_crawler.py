@@ -11,7 +11,7 @@ from instagram_crawler import (
 
 def main():
     # 1. 크롤링을 테스트할 실제 인스타그램 게시물 URL을 넣어주세요!
-    test_url = "https://www.instagram.com/p/C_m_xxxxxxx/" 
+    test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==" 
     
     # 2. 스텔스 옵션 생성 및 적용
     options = Options()
