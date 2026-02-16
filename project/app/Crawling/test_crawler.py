@@ -30,7 +30,7 @@ def main():
         )
 
         # 🍪 쿠키 주입
-        if SESSION_ID != "여기에_복사한_sessionid를_붙여넣으세요":
+        if SESSION_ID != "66800932735%3AkVPzTn1cdOCvwk%3A21%3AAYifS7X9eYVuTGD36Dxeoihm_bnJu2Npi8xzz1MIUw":
             context.add_cookies([{
                 "name": "sessionid",
                 "value": SESSION_ID,
