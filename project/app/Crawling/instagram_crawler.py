@@ -1,7 +1,12 @@
 import logging
 import re
 from typing import Dict
+import requests
+import json
+import os
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
+from instagram_crawler import crawl_instagram_post
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +125,40 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
         result["error"] = str(e)
 
     return result
+
+def download_images(image_urls: list, save_dir: str = "insta_vibes"):
+    if not image_urls:
+        print("⚠️ 다운로드할 이미지가 없습니다.")
+        return [] # 빈 리스트 반환으로 수정
+
+    # 폴더가 없으면 생성
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+        print(f"📁 [{save_dir}] 폴더를 새로 생성했습니다.")
+
+    downloaded_paths = [] # 🌟 추가: 성공한 파일들의 경로를 담을 바구니
+    print(f"\n⬇️ 총 {len(image_urls)}장의 이미지 다운로드를 시작합니다...")
+
+    for index, url in enumerate(image_urls):
+        try:
+            # 이미지 데이터 가져오기 (requests 사용)
+            response = requests.get(url, timeout=10)
+            response.raise_for_status() 
+
+            # 파일명 지정 (예: image_01.jpg)
+            file_name = f"image_{index + 1:02d}.jpg"
+            file_path = os.path.join(save_dir, file_name)
+
+            # 파일로 저장 (바이너리 쓰기 모드 'wb')
+            with open(file_path, "wb") as f:
+                f.write(response.content)
+            
+            downloaded_paths.append(file_path) 
+            print(f"  ✅ {file_name} 저장 완료")
+
+        except Exception as e:
+            print(f"  ❌ {index + 1}번째 이미지 다운로드 실패: {e}")
+
+    print("🎉 모든 이미지 다운로드가 완료되었습니다!\n")
+    
+    return downloaded_paths 
