@@ -1,4 +1,3 @@
-# 수정할 상단 Import 부분
 import json
 from playwright.sync_api import sync_playwright
 from instagram_llm import extract_fact_and_vibe
