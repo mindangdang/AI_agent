@@ -15,7 +15,6 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError("⚠️ .env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-# 최신 SDK 방식의 클라이언트 초기화
 client = genai.Client(api_key=api_key)
 
 # ---------------------------------------------------------
@@ -23,7 +22,6 @@ client = genai.Client(api_key=api_key)
 # ---------------------------------------------------------
 
 class Facts(BaseModel):
-    # LLM이 값을 생략해도 에러가 나지 않도록 default=None 추가
     title: Optional[str] = Field(description="상품명, 브랜드명, 작품명, 상호명 또는 주제, 제목", default=None)
     price_info: Optional[str] = Field(description="상품가격, 메뉴 가격대 등 비용 관련 텍스트", default=None)
     location_text: Optional[str] = Field(description="위치, 주소 텍스트", default=None)
