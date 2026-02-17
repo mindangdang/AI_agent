@@ -1,13 +1,8 @@
-import os
+# 수정할 상단 Import 부분
 import json
-import requests
-from io import BytesIO
-from PIL import Image
-import google.generativeai as genai
-from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 from instagram_llm import extract_fact_and_vibe
-from instagram_crawler import crawl_instagram_post,download_images
+from instagram_crawler import crawl_instagram_post, download_images
 
 def main():
     test_url = "https://www.instagram.com/p/DNSF5jryTof/"

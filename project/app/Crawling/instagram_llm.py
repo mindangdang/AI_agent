@@ -1,12 +1,9 @@
+# 수정할 상단 Import 부분
 import os
 import json
-import requests
-from io import BytesIO
 from PIL import Image
 import google.generativeai as genai
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
-from instagram_crawler import crawl_instagram_post
 
 # ---------------------------------------------------------
 # 1. 환경변수 및 API 설정
