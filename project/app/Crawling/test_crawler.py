@@ -46,8 +46,8 @@ def download_images(image_urls: list, save_dir: str = "insta_vibes"):
 def main():
     test_url = "https://www.instagram.com/p/DNSF5jryTof/"
     
-    # 🔥 사용자님의 실제 쿠키 값
-    SESSION_ID = "66800932735%3AkVPzTn1cdOCvwk%3A21%3AAYifS7X9eYVuTGD36Dxeoihm_bnJu2Npi8xzz1MIUw"
+ 
+    SESSION_ID = "66800932735%3AjGpVGX2rw1w0pg%3A5%3AAYi3grlo_r7KPknWn64XYlidLAI388z6C__OGS0hDw"
 
     with sync_playwright() as p:
         print("🚀 Playwright 브라우저 시작...")
