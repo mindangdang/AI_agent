@@ -2,7 +2,7 @@
 import os
 import json
 from PIL import Image
-import google.generativeai as genai
+import google.genai as genai
 from dotenv import load_dotenv
 import requests
 from io import BytesIO

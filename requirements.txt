@@ -1,6 +1,6 @@
 playwright
 playwright-stealth
-google-generativeai
+google-genai
 pillow
 requests
 python-dotenv
