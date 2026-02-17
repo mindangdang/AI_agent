@@ -6,7 +6,7 @@ from instagram_crawler import crawl_instagram_post, download_images
 
 def main():
     test_url = "https://www.instagram.com/p/DNSF5jryTof/"
-    SESSION_ID = "66800932735%3AkVPzTn1cdOCvwk%3A21%3AAYifS7X9eYVuTGD36Dxeoihm_bnJu2Npi8xzz1MIUw" 
+    SESSION_ID = "66800932735%3AUOpBmfQO7fuyAn%3A1%3AAYiIHAzu5duEZl2Fx9LgW79sWhywVtxFvJ7kM09QzA" 
 
     with sync_playwright() as p:
         print("🚀 [Step 1] Playwright 크롤러 시작...")
