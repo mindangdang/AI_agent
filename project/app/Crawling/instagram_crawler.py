@@ -8,8 +8,10 @@ logger = logging.getLogger(__name__)
 # --- 정규식 및 선택자 ---
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([^\s#.,!?;:]+)")
 VIDEO_SELECTOR = "video"
+# 인스타그램의 다양한 '다음' 버튼 구조 대응
 NEXT_BUTTON_SELECTOR = "button[aria-label*='Next'], button[aria-label*='다음'], div[role='button'] svg[aria-label='다음']"
 
+# 본문 텍스트를 담고 있는 태그 후보군
 CAPTION_CANDIDATES = [
     "h1",
     "div._a9zs", 
@@ -30,10 +32,11 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
     }
 
     try:
+        # 페이지 이동 및 로드 대기
         page.goto(post_url, wait_until="domcontentloaded")
         
         try:
-            # 로딩 대기: article이나 main 태그가 화면에 나타날 때까지 기다림
+            # article이나 main 태그가 뜰 때까지 대기
             page.wait_for_selector("article, main", timeout=15000)
         except PlaywrightTimeoutError:
             page_text = page.content().lower()
@@ -45,21 +48,19 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 result["error"] = "접근이 차단되었거나 페이지 구조가 변경되었습니다."
             return result
 
-        # 🎯 핵심 수정 포인트: 탐색 구역을 엄격하게 제한!
-        # 1순위: article 태그가 있으면 무조건 그것만 게시물 박스로 잡음
+        # 🎯 컨테이너 설정: 화면 전체 탐색을 방지하기 위해 최소한의 기준점(main 또는 article)을 잡습니다.
         if page.locator("article").count() > 0:
             post_container = page.locator("article").first
-        # 2순위: article이 진짜 없다면, main 아래의 첫 번째 구역만 잡음 (추천 게시물 방어)
         else:
-            post_container = page.locator("main > div").first
+            post_container = page.locator("main").first
 
-        # 1. 본문(Caption) 추출
+        # 1. 본문(Caption) 및 해시태그 추출
         for selector in CAPTION_CANDIDATES:
             elements = post_container.locator(selector).all()
             for element in elements:
                 if element.is_visible():
                     text = element.inner_text().strip()
-                    # 본문 검증 (15자 이상)
+                    # 아이디가 아닌 '진짜 본문(15자 이상)'인지 검증
                     if text and not text.startswith("#") and len(text) > 15:
                         result["caption"] = text
                         result["hashtags"] = HASHTAG_PATTERN.findall(text)
@@ -72,36 +73,43 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
         is_video = False
 
         for _ in range(max_slides):
+            # 화면이 로드되고 슬라이드가 넘어갈 시간을 잠깐 줌
             page.wait_for_timeout(500)
             
+            # 비디오 여부 체크
             if post_container.locator(VIDEO_SELECTOR).count() > 0:
                 is_video = True
             
-            # 좁혀진 게시물 박스 안에서만 이미지를 찾음
+            # 🎯 [핵심] 궁극의 DOM 구조 & 크기 필터링!
+            # 1. e.closest('a') === null : 부모 중 <a> 태그가 있는 '추천 게시물 썸네일' 완벽 차단
+            # 2. e.clientWidth > 250 : 화면상 가로 너비가 250px 이하인 '프로필, 아이콘' 완벽 차단
             images = post_container.locator("img").evaluate_all(
-                "elements => elements.map(e => e.src)"
+                """elements => elements
+                    .filter(e => e.closest('a') === null)
+                    .filter(e => e.clientWidth > 250)
+                    .map(e => e.src)
+                """
             )
             
             for src in images:
                 if not src: continue
-                is_cdn = "cdninstagram.com" in src or "fbcdn.net" in src
-                # 프로필 사진 필터링
-                is_profile = "150x150" in src or "profile_pic" in src
-                
-                if is_cdn and not is_profile:
+                # 인스타그램 실제 사진 서버(CDN) 도메인인지 최종 확인
+                if "cdninstagram.com" in src or "fbcdn.net" in src:
                     all_images.append(src)
 
-            # 다음 버튼 클릭 (마찬가지로 게시물 박스 안에서만 찾음)
+            # 다음 슬라이드 버튼 찾기 및 클릭
             next_btn = post_container.locator(NEXT_BUTTON_SELECTOR).first
             if next_btn.is_visible():
                 next_btn.click()
-                page.wait_for_timeout(1000)
+                page.wait_for_timeout(1000) # 슬라이드 애니메이션 대기
             else:
+                # 더 이상 다음 버튼이 없으면 반복문 종료
                 break
 
-        # 중복 제거 후 순서 유지
+        # 중복된 이미지 URL 제거 (순서는 그대로 유지)
         result["image_urls"] = list(dict.fromkeys(all_images))
 
+        # 게시물 타입(Carousel, Video, Image) 판별
         if is_video:
             result["post_type"] = "video"
         elif len(result["image_urls"]) > 1:
