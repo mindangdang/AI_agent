@@ -13,7 +13,7 @@ google_api_key = os.environ.get("GOOGLE_API_KEY")
 client = genai.Client(api_key=google_api_key)
 
 # ==========================================
-# 🧠 1. Vibe 텍스트 -> 벡터 변환 함수
+# 1. Vibe 텍스트 -> 벡터 변환 함수
 # ==========================================
 def get_vibe_vector(text: str):
     """감성 텍스트를 768차원 벡터로 변환합니다."""
@@ -31,7 +31,7 @@ def get_vibe_vector(text: str):
     return str(response.embeddings[0].values)
 
 # ==========================================
-# 🗄️ 2. JSON 데이터 DB Insert 함수
+# 2. JSON 데이터 DB Insert 함수
 # ==========================================
 def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
     """LLM이 추출한 아이템 리스트(JSON)를 DB에 저장합니다."""
