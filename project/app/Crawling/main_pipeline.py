@@ -46,8 +46,8 @@ def main():
             
             ai_result = extract_fact_and_vibe(
                 image_paths=target_images, 
-                caption=crawl_result["caption"],  # pyright: ignore[reportArgumentType]
-                hashtags=crawl_result["hashtags"] # pyright: ignore[reportArgumentType]
+                caption=crawl_result["caption"],  
+                hashtags=crawl_result["hashtags"] 
             )
             
             print("\n" + "="*50)
@@ -55,7 +55,7 @@ def main():
             print("="*50)
             print(json.dumps(ai_result, ensure_ascii=False, indent=2))
             print("="*50)
-            
+
             print("\n🚀 [Step 4] Neon DB 데이터 적재 시작...")
             
             # Pydantic 결과물에서 리스트 형태의 데이터만 추출
