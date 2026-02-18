@@ -52,7 +52,7 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 result["error"] = "접근이 차단되었거나 페이지 구조가 변경되었습니다."
             return result
 
-        # 🎯 컨테이너 설정: 화면 전체 탐색을 방지하기 위해 최소한의 기준점(main 또는 article)을 잡습니다.
+        # 컨테이너 설정: 화면 전체 탐색을 방지하기 위해 최소한의 기준점(main 또는 article)을 잡습니다.
         if page.locator("article").count() > 0:
             post_container = page.locator("article").first
         else:
@@ -135,7 +135,7 @@ def download_images(image_urls: list, save_dir: str = "insta_vibes"):
         os.makedirs(save_dir)
         print(f"📁 [{save_dir}] 폴더를 새로 생성했습니다.")
 
-    downloaded_paths = [] # 🌟 추가: 성공한 파일들의 경로를 담을 바구니
+    downloaded_paths = [] # 성공한 파일들의 경로를 담을 바구니
     print(f"\n⬇️ 총 {len(image_urls)}장의 이미지 다운로드를 시작합니다...")
 
     for index, url in enumerate(image_urls):

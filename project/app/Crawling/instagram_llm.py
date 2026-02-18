@@ -29,9 +29,9 @@ class Facts(BaseModel):
     key_details: Optional[List[str]] = Field(description="핵심 특징 1, 2, 3", default=None)
 
 class ExtractedItem(BaseModel):
-    category: str = Field(description="PLACE, PRODUCT, CONTENT, EVENT, TIP, INSPIRATION 중 택 1")
+    category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
     summary_text: str = Field(description="이 게시물이 무엇을 말하는지 객관적이고 간략한 내용 요약 (앱 화면 노출용)")
-    vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. '느좋', '힙한' 등 추상적 키워드를 문장에 자연스럽게 포함할 것 (유사도 검색용)")
+    vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것 (유사도 검색용)")
     facts: Facts
 
 class InstaAnalysisResult(BaseModel):

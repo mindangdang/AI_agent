@@ -33,11 +33,11 @@ def main():
             print(f"❌ 크롤링 실패: {crawl_result['error']}")
             return
 
-        print(f"\n✅ [Step 1 완료] 크롤링 성공! (캡션: {crawl_result['caption'][:20]}...)") # pyright: ignore[reportIndexIssue]
+        print(f"\n✅ [Step 1 완료] 크롤링 성공! (캡션: {crawl_result['caption'][:20]}...)") 
 
         # 2️⃣ 이미지 다운로드
         print("\n🚀 [Step 2] 이미지 다운로드 시작...")
-        downloaded_files = download_images(crawl_result["image_urls"], save_dir="insta_vibes") # type: ignore
+        downloaded_files = download_images(crawl_result["image_urls"], save_dir="insta_vibes") 
 
         # 3️⃣ AI 분석 실행 
         if downloaded_files:
