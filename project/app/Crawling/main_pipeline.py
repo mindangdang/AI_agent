@@ -2,6 +2,7 @@ import json
 from playwright.sync_api import sync_playwright
 from instagram_llm import extract_fact_and_vibe
 from instagram_crawler import crawl_instagram_post, download_images
+from insert_db import insert_items_to_db
 
 def main():
     test_url = "https://www.instagram.com/p/DN7xKptkYQK/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
@@ -54,6 +55,22 @@ def main():
             print("="*50)
             print(json.dumps(ai_result, ensure_ascii=False, indent=2))
             print("="*50)
+            
+            print("\n🚀 [Step 4] Neon DB 데이터 적재 시작...")
+            
+            # Pydantic 결과물에서 리스트 형태의 데이터만 추출
+            extracted_items = ai_result.get("extracted_items", [])
+            
+            if extracted_items:
+                # 테스트용 유저 ID (나중에 실제 로그인 유저 ID로 대체)
+                test_user_id = "mindangdang_01" 
+                
+                # insert_db.py의 함수 실행 (알아서 임베딩 API 호출 후 DB에 INSERT)
+                insert_items_to_db(test_user_id, test_url, extracted_items)
+                
+                print("\n🎉 [End-to-End 성공] 데이터 수집부터 DB 적재까지 완벽하게 끝났습니다!")
+            else:
+                print("⚠️ DB에 적재할 유의미한 아이템이 분석되지 않았습니다.")
         else:
             print("⚠️ 분석할 이미지가 없습니다.")
 
