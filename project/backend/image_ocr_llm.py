@@ -1,15 +1,21 @@
 import os
+import json
+import time 
+from typing import List, Optional
 from PIL import Image
-from google import genai
-from google.genai import types
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from typing import List, Optional
-import time 
-import json
+
+# 제미나이 SDK
+from google import genai
+from google.genai import types
+
+# [추가됨] 이미지 임베딩을 위한 HuggingFace CLIP 로드
+import torch
+from transformers import CLIPProcessor, CLIPModel
 
 # ---------------------------------------------------------
-# 1. 환경변수 및 API 설정
+# 1. 환경변수 및 API, AI 모델 설정
 # ---------------------------------------------------------
 
 load_dotenv()
@@ -18,6 +24,21 @@ if not api_key:
     raise ValueError("⚠️ .env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
 client = genai.Client(api_key=api_key)
+
+# [추가됨] CLIP 모델 초기화 (서버 가동 시 1회만 로드하여 속도 최적화)
+print("⚙️ CLIP 모델을 로드하는 중입니다... (최초 1회)")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+def get_image_embedding(image: Image.Image) -> List[float]:
+    """PIL 이미지를 받아 512차원의 CLIP 임베딩 벡터로 변환 (정규화 포함)"""
+    inputs = clip_processor(images=image, return_tensors="pt").to(device)
+    with torch.no_grad():
+        image_features = clip_model.get_image_features(**inputs)
+    # Cosine Similarity 계산을 위해 L2 정규화 수행
+    image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
+    return image_features.cpu().numpy().tolist()[0]
 
 # ---------------------------------------------------------
 # 2. Schema에 대한 Pydantic 정의
@@ -35,17 +56,19 @@ class Review(BaseModel):
     core_summary: str = Field(description="여러사람들의 리뷰를 중요하고 핵심적인 내용만 요약한 텍스트", default=None)
 
 class ExtractedItem(BaseModel):
+    image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
     category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
-    summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약 (앱 화면 노출용)")
-    vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것 (유사도 검색용)")
+    summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약")
+    vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것")
     facts: Facts
     reviews: Optional[Review] = None
+    image_embedding: Optional[List[float]] = Field(description="CLIP 기반 512차원 이미지 임베딩 벡터", default=None)
 
 class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
 
 # ---------------------------------------------------------
-# 3. Gemini 2.5 Flash 분석 엔진 
+# 3. Gemini 2.5 Flash 분석 엔진 & 멀티모달 파이프라인
 # ---------------------------------------------------------
 
 def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
@@ -63,8 +86,8 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     tags_str = " ".join(hashtags) if hashtags else ""
     text_input = f"캡션: {caption}\n해시태그: {tags_str}"
 
-    #Step.1: LLM OCR
-    prompt_ocr = """
+    # Step.1: LLM OCR & Context Extraction
+    prompt_ocr =  """
     너는 한장 이상의 이미지 슬라이드로 구성된 인스타그램 게시물을 분석하여 '취향 검색 DB용' 데이터를 추출해내는 세계 최고 수준의 AI 데이터 엔지니어야.
     제공된 '이미지(순서대로)'들과 '텍스트(캡션+해시태그)'를 종합적으로 분석해.
 
@@ -73,6 +96,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     2. 순차적 기준점 추적 (Sequential Tracking): 첫 번째로 등장하는 유의미한 '상호명, 상품명, 또는 주제(Anchor)'를 찾아내. 그 순간부터 등장하는 모든 시각적 특징과 텍스트 설명은 해당 대상의 정보로 수집해.
     3. 교차 검증 (Cross-matching): 캡션에 적힌 설명이 몇 번째 슬라이드의 어떤 대상을 가리키는지 논리적으로 연결해. 이미지 속 글자(OCR)와 캡션의 설명을 결합해서 하나의 완벽한 대상 프로필을 완성해.
     4. 독립적 데이터 분할: 읽어나가다가 새로운 상호명/상품명(다음 Anchor)이 등장하거나, 순번(예: "2.", "두 번째는")이 바뀌면 이전 대상의 정보 수집을 즉시 종료하고 확정해. 대상 간의 정보가 절대 섞이지 않게 마지막 슬라이드까지 순차적으로 반복해.
+    5. 각각 독립적인 대상에 대해서 인덱스 번호를 부여해. 이는 이미지 임베딩을 위해 각 이미지에 인덱싱을 해서 순서를 헷갈리게 하지 않기 위한 작업이야.
 
     [데이터 추출 및 작성 규칙]
     - 객관적 팩트 (Facts): 확인 가능한 사실(이름, 위치, 가격, 시간, 특징)만 정확히 추출해. 본문에 없거나 유추할 수 없는 정보는 절대 지어내지 말고 `null`로 비워둬.
@@ -99,10 +123,24 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         )
     )
 
-    #Step.2: LLM Review search
+    extracted_data = response_ocr.parsed
 
-    for item in response_ocr.parsed.extracted_items:
+    # Step.2 & 3: Review Search 및 Image Embedding 병렬 처리
+    for item in extracted_data.extracted_items:
         title = item.facts.title
+
+        # --- Step.3: 이미지 벡터 임베딩 ---
+        try:
+            # LLM이 매핑해준 슬라이드 인덱스를 바탕으로 원본 이미지 선택
+            target_image = images[item.image_index]
+            print(f"🎨 '{title}'의 시각적 바이브(Slide {item.image_index})를 임베딩합니다...")
+            item.image_embedding = get_image_embedding(target_image)
+        except Exception as e:
+            print(f"⚠️ '{title}' 이미지 임베딩 실패: {e}")
+            # 매핑에 실패한 경우 안전하게 첫 번째 이미지를 기본값으로 사용
+            if images:
+                item.image_embedding = get_image_embedding(images[0])
+        # -------------------------------------------
 
         if not title:
             item.reviews = None 
@@ -110,21 +148,19 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
 
         print(f"🔍 '{title}'에 대한 실시간 리뷰를 검색합니다...")
 
-        # 수정 포인트: 프롬프트 안에 title 변수를 쏙 끼워 넣습니다.
         prompt_review = f"""
         너는 주어진 이름만 갖고 구글 검색을 통해 그 대상의 객관적인 평가와 유용한 리뷰 정보를 모아오는 세계 최고의 데이터 수집가야.
-        다음 규칙을 준수해서 점수와 리뷰를 수집해줘.
         
         [검색 대상]: {title}
         
         [규칙]
         1.없는 내용은 절대 지어내지 말 것
         2.여러 리뷰에서 공통적으로 나오는 의견을 최대한 반영할 것
-        3.개인의 악의적인 리뷰나 허위 사실 등 데이터에 노이즈가 될 만한 건 배제할 것.
-        4.만약 검색을 해도 리뷰가 안나온다면 억지로 만들어내지 말고 내용을 비워놔.
+        3.개인의 악의적인 리뷰나 허위 사실 등 노이즈 배제
+        4.검색해도 안 나오면 억지로 만들지 말고 내용을 비워놔
         
         [출력 형식]
-        반드시 아래 JSON 형태로만 대답해. 인사말이나 마크다운 기호(```json 등) 없이 순수 JSON 텍스트만 출력해.
+        반드시 아래 JSON 형태로만 대답해. 마크다운 기호 없이 순수 JSON 텍스트만 출력해.
         {{
             "star_review": "4.5 (평점 예시)",
             "core_summary": "리뷰 요약 텍스트"
@@ -142,7 +178,6 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
             )
             raw_text = response_review.text.strip()
             
-            # (혹시 LLM이 ```json 을 붙여서 대답했을 경우를 대비한 방어 코드)
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:-3].strip()
                 
@@ -151,8 +186,10 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
             
         except Exception as e:
             print(f"⚠️ '{title}' 리뷰 검색 중 에러 발생: {e}")
-            item.reviews = None # 에러 나도 파이프라인이 멈추지 않게 빈 리스트 처리
-        time.sleep(15)
+            item.reviews = None 
+            
+        time.sleep(15) # Google Search API Rate Limit 방어
 
-    print("🎉 모든 데이터 추출 및 조립 완료!")
-    return response_ocr.parsed.model_dump()
+    print("🎉 모든 데이터 추출, 임베딩 및 조립 완료!")
+    return extracted_data.model_dump()
+

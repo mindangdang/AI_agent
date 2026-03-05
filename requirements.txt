@@ -5,3 +5,5 @@ pillow
 requests
 python-dotenv
 psycopg2-binary
+torch
+transformers
