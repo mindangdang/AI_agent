@@ -4,17 +4,18 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 
 # ==========================================
 # 1. 환경 변수 및 설정
 # ==========================================
-# Neon DB 연결 문자열 (Neon 대시보드에서 확인 가능)
-NEON_DB_URL = os.environ.get("DATABASE_URL", "postgresql://user:password@ep-cool-sun-123456.ap-southeast-1.aws.neon.tech/dbname?sslmode=require")
-# Gemini API Key (또는 OpenAI 등 사용하는 LLM의 키)
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "your_api_key_here")
+
+load_dotenv()
+GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
+NEON_DB_URL = os.environ.get("NEON_DB_URL")
 
 # ==========================================
-# 2. 시스템 프롬프트 (Vibe Search 수석 큐레이터)
+# 2. 시스템 프롬프트
 # ==========================================
 SYSTEM_PROMPT = """
 [System Persona]
@@ -32,9 +33,6 @@ SYSTEM_PROMPT = """
 - Vibe: 분위기, 감성, 사용 맥락
 - Key Details: 특징적인 디테일과 물성
 
-[POST DATA]
-{{여기에 데이터 삽입}}
-
 [Core Analysis Rules]
 1. 1차원적 요약 절대 금지: "카페를 좋아하고 옷에 관심이 많다" 식의 단순 나열은 철저히 배제한다.
 2. 교차 도메인의 끈(The Hidden Thread) 발견:저장된 게시물에서 반복되는 **분위기(vibe)**를 찾아내라. 패션, 공간, 오브제 등 카테고리가 달라도 그 밑바탕을 관통하는 단 하나의 '미학적/철학적 교집합'을 찾아낸다.
@@ -48,13 +46,13 @@ SYSTEM_PROMPT = """
 [Output Format]
 사고 과정을 마친 후, 사용자에게 직접 말을 건네는 문학적이고 매혹적인 어투로 아래 세 가지 섹션만 출력하라.
 
-🏷️ [당신의 미학적 페르소나]
+[당신의 미학적 페르소나]
 - 유저의 취향과 본질을 한 문장으로 정의하는 강렬한 타이틀 (단 1문장. 예: "과잉된 효율성의 시대를 조롱하는, 정교한 불완전함의 수집가.")
 
-👁️ [나도 몰랐던 나의 시각적 편향]
+[나도 몰랐던 나의 시각적 편향]
 - '교차 도메인의 끈'과 '모순점'을 바탕으로, 사용자의 무의식적인 취향과 삶의 태도를 날카롭게 분석하는 텍스트 (3~4문장). 단순한 나열이 아닌, 마치 오랫동안 관찰해온 듯한 소름 돋는 통찰을 담을 것.
 
-🎯 [Vibe Search의 예측]
+[Vibe Search의 예측]
 - 이 취향을 가진 사람이 앞으로 저장할 가능성이 높은
 공간, 오브제, 혹은 경험을 하나 예측하라. "당신은 조만간 이런 바이브의 [특정 물건/장소/경험]에 강렬하게 끌리게 될 것입니다"라는 예리한 예측 하나 제시.
 
@@ -71,14 +69,11 @@ SYSTEM_PROMPT = """
 # 3. 데이터 로드 및 포맷팅 함수
 # ==========================================
 def fetch_user_data_from_neon(user_id: int):
-    """Neon DB에서 특정 사용자의 저장된 인스타 데이터(ExtractedItem 형태)를 가져옵니다."""
     try:
         # DB 연결
         conn = psycopg2.connect(NEON_DB_URL)
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # 예시 쿼리: user_id에 해당하는 저장 게시물들을 가져옴.
-        # (실제 테이블 명과 컬럼 명인 'extracted_data'는 스키마에 맞게 수정하세요)
+
         query = """
             SELECT extracted_data 
             FROM user_saved_posts 
@@ -100,11 +95,9 @@ def fetch_user_data_from_neon(user_id: int):
         return []
 
 def format_data_for_prompt(items: list) -> str:
-    """DB에서 가져온 JSON 데이터를 LLM이 읽기 좋은 텍스트 텍스트 형태로 압축합니다."""
     formatted_posts = []
     
     for idx, item in enumerate(items, 1):
-        # facts 딕셔너리 안전하게 접근
         facts = item.get("facts", {})
         title = facts.get("title", "알 수 없음")
         location = facts.get("location_text", "위치 정보 없음")
@@ -152,11 +145,11 @@ def analyze_vibe(user_id: int):
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-pro', # 또는 더 빠른 gemini-2.5-flash
+            model='gemini-2.5-flash', 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                temperature=0.7, # 창의적이고 도발적인 분석을 위해 약간 높게 설정
+                temperature=0.7, 
             ),
         )
         print("================================")
