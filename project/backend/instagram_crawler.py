@@ -12,10 +12,7 @@ logger = logging.getLogger(__name__)
 # --- 정규식 및 선택자 ---
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([^\s#.,!?;:]+)")
 VIDEO_SELECTOR = "video"
-# 인스타그램의 다양한 '다음' 버튼 구조 대응
 NEXT_BUTTON_SELECTOR = "button[aria-label*='Next'], button[aria-label*='다음'], div[role='button'] svg[aria-label='다음']"
-
-# 본문 텍스트를 담고 있는 태그 후보군
 CAPTION_CANDIDATES = [
     "h1",
     "div._a9zs", 
@@ -85,8 +82,6 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 is_video = True
             
             # 🎯 [핵심] 궁극의 DOM 구조 & 크기 필터링!
-            # 1. e.closest('a') === null : 부모 중 <a> 태그가 있는 '추천 게시물 썸네일' 완벽 차단
-            # 2. e.clientWidth > 250 : 화면상 가로 너비가 250px 이하인 '프로필, 아이콘' 완벽 차단
             images = post_container.locator("img").evaluate_all(
                 """elements => elements
                     .filter(e => e.closest('a') === null)
@@ -107,7 +102,6 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 next_btn.click()
                 page.wait_for_timeout(1000) # 슬라이드 애니메이션 대기
             else:
-                # 더 이상 다음 버튼이 없으면 반복문 종료
                 break
 
         # 중복된 이미지 URL 제거 (순서는 그대로 유지)
@@ -128,27 +122,24 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
 def download_images(image_urls: list, save_dir: str = "insta_vibes"):
     if not image_urls:
         print("⚠️ 다운로드할 이미지가 없습니다.")
-        return [] # 빈 리스트 반환으로 수정
+        return []
 
     # 폴더가 없으면 생성
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
         print(f"📁 [{save_dir}] 폴더를 새로 생성했습니다.")
 
-    downloaded_paths = [] # 성공한 파일들의 경로를 담을 바구니
+    downloaded_paths = []
     print(f"\n⬇️ 총 {len(image_urls)}장의 이미지 다운로드를 시작합니다...")
 
     for index, url in enumerate(image_urls):
         try:
-            # 이미지 데이터 가져오기 (requests 사용)
             response = requests.get(url, timeout=10)
             response.raise_for_status() 
 
-            # 파일명 지정 (예: image_01.jpg)
             file_name = f"image_{index + 1:02d}.jpg"
             file_path = os.path.join(save_dir, file_name)
 
-            # 파일로 저장 (바이너리 쓰기 모드 'wb')
             with open(file_path, "wb") as f:
                 f.write(response.content)
             
@@ -159,5 +150,54 @@ def download_images(image_urls: list, save_dir: str = "insta_vibes"):
             print(f"  ❌ {index + 1}번째 이미지 다운로드 실패: {e}")
 
     print("🎉 모든 이미지 다운로드가 완료되었습니다!\n")
-    
-    return downloaded_paths 
+    return downloaded_paths
+
+def main(post_url: str):
+    STATE_FILE = "instagram_state.json"
+
+    with sync_playwright() as p:
+        # 최초 로그인 및 크롤링 과정을 확인하기 위해 headless=False 설정
+        # 나중에 완전히 자동화하려면 True로 변경하셔도 됩니다.
+        browser = p.chromium.launch(headless=False)
+        
+        # 1. 로그인 상태 확인 및 적용
+        if os.path.exists(STATE_FILE):
+            print("저장된 로그인 상태(instagram_state.json)를 불러옵니다...")
+            context = browser.new_context(storage_state=STATE_FILE)
+            page = context.new_page()
+        else:
+            print("저장된 로그인 상태가 없습니다. 브라우저가 열리면 인스타그램 로그인을 진행해주세요.")
+            context = browser.new_context()
+            page = context.new_page()
+            
+            page.goto("https://www.instagram.com/accounts/login/")
+            # 사용자가 콘솔에서 엔터를 칠 때까지 대기
+            input("👉 브라우저에서 로그인을 완전히 마친 후, 이 콘솔 창에서 [Enter] 키를 눌러주세요...") 
+            
+            # 로그인 완료 후 상태 저장
+            context.storage_state(path=STATE_FILE)
+            print(f"✅ 로그인 상태가 '{STATE_FILE}'에 저장되었습니다. 다음부터는 자동 로그인됩니다.")
+
+        # 2. 크롤링 및 다운로드 실행
+        print(f"\n[{post_url}] 크롤링을 시작합니다...")
+        result = crawl_instagram_post(page, post_url)
+        
+        if result.get("error"):
+            print(f"❌ 크롤링 에러 발생: {result['error']}")
+        else:
+            print("✅ 크롤링 성공!")
+            print(f"📝 본문: {result['caption'][:30]}..." if result['caption'] else "📝 본문: 없음")
+            print(f"🏷️ 해시태그: {result['hashtags']}")
+            
+            # 이미지 다운로드 수행
+            if result["image_urls"]:
+                download_images(result["image_urls"])
+            else:
+                print("⚠️ 수집된 이미지가 없습니다.")
+
+        browser.close()
+
+if __name__ == "__main__":
+    # 테스트할 인스타그램 게시물 URL을 입력하세요.
+    TARGET_POST_URL = "https://www.instagram.com/p/여기에_게시물_ID/"
+    main(TARGET_POST_URL)
