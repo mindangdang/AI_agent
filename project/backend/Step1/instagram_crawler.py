@@ -12,7 +12,10 @@ logger = logging.getLogger(__name__)
 # --- 정규식 및 선택자 ---
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([^\s#.,!?;:]+)")
 VIDEO_SELECTOR = "video"
+# 인스타그램의 다양한 '다음' 버튼 구조 대응
 NEXT_BUTTON_SELECTOR = "button[aria-label*='Next'], button[aria-label*='다음'], div[role='button'] svg[aria-label='다음']"
+
+# 본문 텍스트를 담고 있는 태그 후보군
 CAPTION_CANDIDATES = [
     "h1",
     "div._a9zs", 
@@ -82,6 +85,8 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 is_video = True
             
             # 🎯 [핵심] 궁극의 DOM 구조 & 크기 필터링!
+            # 1. e.closest('a') === null : 부모 중 <a> 태그가 있는 '추천 게시물 썸네일' 완벽 차단
+            # 2. e.clientWidth > 250 : 화면상 가로 너비가 250px 이하인 '프로필, 아이콘' 완벽 차단
             images = post_container.locator("img").evaluate_all(
                 """elements => elements
                     .filter(e => e.closest('a') === null)
@@ -102,6 +107,7 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 next_btn.click()
                 page.wait_for_timeout(1000) # 슬라이드 애니메이션 대기
             else:
+                # 더 이상 다음 버튼이 없으면 반복문 종료
                 break
 
         # 중복된 이미지 URL 제거 (순서는 그대로 유지)
@@ -122,24 +128,27 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
 def download_images(image_urls: list, save_dir: str = "insta_vibes"):
     if not image_urls:
         print("⚠️ 다운로드할 이미지가 없습니다.")
-        return []
+        return [] # 빈 리스트 반환으로 수정
 
     # 폴더가 없으면 생성
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
         print(f"📁 [{save_dir}] 폴더를 새로 생성했습니다.")
 
-    downloaded_paths = []
+    downloaded_paths = [] # 성공한 파일들의 경로를 담을 바구니
     print(f"\n⬇️ 총 {len(image_urls)}장의 이미지 다운로드를 시작합니다...")
 
     for index, url in enumerate(image_urls):
         try:
+            # 이미지 데이터 가져오기 (requests 사용)
             response = requests.get(url, timeout=10)
             response.raise_for_status() 
 
+            # 파일명 지정 (예: image_01.jpg)
             file_name = f"image_{index + 1:02d}.jpg"
             file_path = os.path.join(save_dir, file_name)
 
+            # 파일로 저장 (바이너리 쓰기 모드 'wb')
             with open(file_path, "wb") as f:
                 f.write(response.content)
             
@@ -150,4 +159,5 @@ def download_images(image_urls: list, save_dir: str = "insta_vibes"):
             print(f"  ❌ {index + 1}번째 이미지 다운로드 실패: {e}")
 
     print("🎉 모든 이미지 다운로드가 완료되었습니다!\n")
+    
     return downloaded_paths
