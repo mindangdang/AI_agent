@@ -98,7 +98,7 @@ def get_taste_context(user_query: str, query_vector: list[float], user_id: int) 
 @mcp.tool()
 def expand_search_queries(user_query: str, vibe_context: str) -> list[str]:
     """
-    원본 쿼리와 취향 맥락(Vibe Context)을 결합하여 고감도 정보만 찾아내는 최적화된 검색 쿼리(Dorks)를 생성합니다.
+    원본 쿼리와 취향 맥락(Vibe Context)을 결합하여 구글 검색에서 고감도 큐레이팅 정보만을 찾아내는데 최적화된 검색 쿼리(Dorks)를 생성합니다.
     """
     prompt = f"""
     당신은 검색 엔진의 노이즈(SEO 최적화된 광고, 무미건조한 핫플 정보)를 혐오하는 검색 설계자다.
@@ -110,7 +110,7 @@ def expand_search_queries(user_query: str, vibe_context: str) -> list[str]:
     구글/네이버에서 감도 높은 디깅 결과만 나오도록 검색 쿼리를 고도화하라.
     1. 마이너스 연산자 필수 사용: -협찬 -원고료 -핫플 -인스타감성 -광고
     2. Vibe Context에 맞는 디테일 키워드(물성, 무드, 브랜드 등) 주입
-    3. 필요시 감도 높은 출처(site:brunch.co.kr, site:twitter.com 등) 제한 활용
+    3. 필요시 감도 높은 출처(site:fruitsfamily.com 등) 제한 활용
     
     [Output Format]
     반드시 파이썬의 리스트(List) 형태의 JSON 배열만 출력하라. 다른 텍스트는 절대 금지.
