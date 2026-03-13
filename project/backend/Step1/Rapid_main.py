@@ -5,7 +5,7 @@ import re
 import os
 from image_ocr_llm import extract_fact_and_vibe
 from instagram_crawler import download_images # 다운로드 함수는 그대로 씁니다!
-from insert_db import insert_items_to_db
+from project.backend.Step1.insert_DB import insert_items_to_db
 
 
 def main():
