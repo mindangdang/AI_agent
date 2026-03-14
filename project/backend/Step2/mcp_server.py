@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 # 1. 초기화
 mcp = FastMCP("VibeSearch_Agents")
-NEON_DB_URL = os.environ.get("DATABASE_URL")
+NEON_DB_URL = os.environ.get("NEON_DB_URL")
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:

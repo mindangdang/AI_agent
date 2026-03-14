@@ -27,11 +27,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-NEON_DB_URL = os.environ.get("DATABASE_URL")
+NEON_DB_URL = os.environ.get("NEON_DB_URL")
 
 def get_db():
     if not NEON_DB_URL:
-        raise HTTPException(status_code=500, detail="DATABASE_URL environment variable is not set.")
+        raise HTTPException(status_code=500, detail="NEON_DB_URL environment variable is not set.")
     conn = psycopg2.connect(NEON_DB_URL)
     return conn
 
@@ -282,6 +282,27 @@ def get_taste():
     cursor.close()
     conn.close()
     return row if row else {"summary": ""}
+
+@app.post("/api/login")
+def login(req: AuthRequest):
+    # data.user 형태로 접근할 수 있게 'user' 키를 씌워줍니다.
+    return {
+        "user": {
+            "id": 1, 
+            "username": req.username
+        },
+        "token": "fake-jwt-token"
+    }
+
+@app.post("/api/signup")
+def signup(req: AuthRequest):
+    # 회원가입 시에도 동일한 규격으로 응답
+    return {
+        "user": {
+            "id": 1, 
+            "username": req.username
+        }
+    }
 
 # ==========================================
 # 프론트엔드 (React SPA) 서빙
