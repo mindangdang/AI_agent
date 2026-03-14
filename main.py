@@ -10,12 +10,12 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from playwright.sync_api import sync_playwright
-from backend.Step1.Rapid_api_crawler import Rapid_crawler
-from backend.Step1.instagram_crawler import download_images, crawl_instagram_post
-from backend.Step1.image_ocr_llm import extract_fact_and_vibe
-from backend.Step1.insert_DB import insert_items_to_db 
-from backend.Step1.preference_llm import analyze_vibe
-from backend.Step2.main_agent import VibeSearchAgent          
+from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
+from project.backend.Step1.instagram_crawler import download_images, crawl_instagram_post
+from project.backend.Step1.image_ocr_llm import extract_fact_and_vibe
+from project.backend.Step1.insert_DB import insert_items_to_db 
+from project.backend.Step1.preference_llm import analyze_vibe
+from project.backend.Step2.main_agent import VibeSearchAgent          
 
 app = FastAPI()
 
