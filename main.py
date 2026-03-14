@@ -6,6 +6,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
@@ -14,18 +18,18 @@ from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.instagram_crawler import download_images, crawl_instagram_post
 from project.backend.Step1.image_ocr_llm import extract_fact_and_vibe
 from project.backend.Step1.insert_DB import insert_items_to_db 
-from project.backend.Step1.preference_llm import analyze_vibe
+from project.backend.Step1.preferance_llm import analyze_vibe
 from project.backend.Step2.main_agent import VibeSearchAgent          
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # 로컬 개발용 허용. 실전 배포 시 도메인 지정 권장
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_credentials=False,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 
@@ -284,32 +288,12 @@ def get_taste():
     return row if row else {"summary": ""}
 
 
-@app.post("/api/login")
-def login(req: AuthRequest):
-    """
-    프론트엔드 Auth.tsx의 onLogin(data.user) 규격에 맞춰
-    데이터를 'user' 키로 감싸서 반환합니다.
-    """
-    return {
-        "user": {
-            "id": 1,
-            "username": req.username
-        },
-        "token": "vibe-search-fake-jwt-token"
-    }
-
-@app.post("/api/signup")
-def signup(req: AuthRequest):
-    """
-    회원가입 후 프론트엔드에서 바로 로그인을 시도하므로
-    동일하게 'user' 키를 포함하여 반환합니다.
-    """
-    return {
-        "user": {
-            "id": 1,
-            "username": req.username
-        }
-    }
+@app.get("/api/debug/dist")
+def debug_dist():
+    import os
+    exists = os.path.exists("dist")
+    contents = os.listdir("dist") if exists else []
+    return {"exists": exists, "contents": contents, "cwd": os.getcwd()}
 
 # ==========================================
 # 프론트엔드 (React SPA) 서빙
@@ -319,13 +303,26 @@ if os.path.exists("dist"):
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    if full_path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="API route not found")
+    # API routes are handled by their respective decorators.
+    # If we reach here, it's either a static file or a SPA route.
+    
+    # Handle root path
+    if not full_path or full_path == "/":
+        if os.path.exists("dist/index.html"):
+            return FileResponse("dist/index.html")
+    
+    # Check if it's a file in dist
+    file_path = os.path.join("dist", full_path)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    # Fallback to SPA routing
     if os.path.exists("dist/index.html"):
         return FileResponse("dist/index.html")
-    return {"error": "Frontend not built. Run 'npm run build' first."}
+    
+    return {"error": "Frontend not built or route not found"}
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 3000)))
     uvicorn.run(app, host="0.0.0.0", port=port)
