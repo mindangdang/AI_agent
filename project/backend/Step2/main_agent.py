@@ -117,7 +117,7 @@ class VibeSearchAgent:
         
         # 제미나이에게 도구 설명서를 쥐여주고 판단을 맡깁니다.
         response = self.client.models.generate_content(
-            model='gemini-3.1-flash-lite', # 라우팅 판단은 빠르고 저렴한 flash 모델 사용 권장
+            model='gemini-2.5-flash-lite', # 라우팅 판단은 빠르고 저렴한 flash 모델 사용 권장
             contents=user_query,
             config=types.GenerateContentConfig(
                 tools=self.tools,

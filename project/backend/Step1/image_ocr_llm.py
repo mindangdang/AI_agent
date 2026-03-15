@@ -120,7 +120,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     contents = [prompt_ocr] + images + [text_input]
 
     response_ocr = client.models.generate_content(
-        model="gemini-3.1-flash-lite",
+        model="gemini-2.5-flash-lite",
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -176,7 +176,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
 
         try:
             response_review = client.models.generate_content(
-                model='gemini-3.1-flash-lite',
+                model='gemini-2.5-flash-lite',
                 contents=prompt_review,
                 config=types.GenerateContentConfig(
                     tools=[{"google_search": {}}], 
