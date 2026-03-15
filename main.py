@@ -43,20 +43,23 @@ def get_db():
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
+
     cursor.execute("""
       CREATE TABLE IF NOT EXISTS saved_posts (
         id SERIAL PRIMARY KEY,
         user_id TEXT,
         source_url TEXT,
+        title TEXT,                
         category TEXT,
         summary_text TEXT,
         vibe_text TEXT,
         vibe_vector vector(768),
         facts JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(source_url, category)
+        UNIQUE(source_url, title)  
       );
     """)
+    
     cursor.execute("""
       CREATE TABLE IF NOT EXISTS taste_profile (
         id INTEGER PRIMARY KEY DEFAULT 1,
@@ -65,6 +68,7 @@ def init_db():
         CONSTRAINT one_row CHECK (id = 1)
       );
     """)
+    
     conn.commit()
     cursor.close()
     conn.close()
