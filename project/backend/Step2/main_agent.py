@@ -41,7 +41,7 @@ class VibeSearchAgent:
 
     def _get_embedding(self, text: str) -> list[float]:
         response = self.client.models.embed_content(
-            model='gemini-embedding-001', 
+            model="gemini-embedding-2-preview", 
             contents=text,
             config=types.EmbedContentConfig(
                 output_dimensionality=768 # DB 스키마(768차원)와 강제 동기화
@@ -101,7 +101,7 @@ class VibeSearchAgent:
         """
         
         response = self.client.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-2.5-flash-lite',
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=[{"google_search": {}}], # 구글 검색 도구 활성화
@@ -137,7 +137,7 @@ class VibeSearchAgent:
         
         # 구글 검색만 켜서 일반적인 답변 제공
         standard_response = self.client.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-2.5-flash-lite',
             contents=user_query,
             config=types.GenerateContentConfig(
                 tools=[{"google_search": {}}] 
