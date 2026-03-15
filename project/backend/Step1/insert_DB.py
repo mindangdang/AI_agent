@@ -14,7 +14,7 @@ google_api_key = os.environ.get("GOOGLE_API_KEY")
 # 구글 API 클라이언트 초기화
 client = genai.Client(api_key=google_api_key)
 
-# 💡 최신 임베딩 모델로 변경 (차원 축소 완벽 지원)
+# 최신 임베딩 모델로 변경 (차원 축소 완벽 지원)
 MODEL_NAME = "text-embedding-001" 
 
 # ==========================================
@@ -34,7 +34,7 @@ def get_vibe_vector(text: str):
         )
         return response.embeddings[0].values
     except Exception as e:
-        print(f"⚠️ 임베딩 생성 실패: {e}")
+        print(f" 임베딩 생성 실패: {e}")
         return None
 
 # ==========================================
@@ -42,14 +42,14 @@ def get_vibe_vector(text: str):
 # ==========================================
 def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
     conn = None
-    cursor = None # 💡 finally 블록에서의 참조 에러를 막기 위해 초기화
+    cursor = None 
     
     try:
         conn = psycopg2.connect(neon_url)
-        register_vector(conn)  # 💡 핵심: psycopg2가 파이썬 리스트를 vector 컬럼에 넣을 수 있게 허가함
+        register_vector(conn)  
         cursor = conn.cursor()
 
-        # 💡 ON CONFLICT 추가: 중복된 URL+Category 데이터가 들어오면 무시하고 다음 것 저장
+
         insert_query = """
             INSERT INTO saved_posts 
             (user_id, source_url, category, summary_text, vibe_text, vibe_vector, facts)
@@ -80,10 +80,10 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
             ))
 
         conn.commit()
-        print(f"✅ DB 저장 완료: {len(extracted_items)}개의 타겟")
+        print(f"DB 저장 완료: {len(extracted_items)}개의 타겟")
         
     except Exception as e:
-        print(f"❌ DB 저장 중 에러 발생: {e}")
+        print(f" DB 저장 중 에러 발생: {e}")
         if conn:
             conn.rollback() 
     finally:
