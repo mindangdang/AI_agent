@@ -140,7 +140,7 @@ def analyze_vibe(user_id: int):
     if not api_key:
         raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-    my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+    my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
     client = genai.Client(
         api_key=api_key,
         http_options=types.HttpOptions(

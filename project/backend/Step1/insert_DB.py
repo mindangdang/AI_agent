@@ -17,7 +17,7 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
 client = genai.Client(
     api_key=api_key,
     http_options=types.HttpOptions(
@@ -25,8 +25,7 @@ client = genai.Client(
     )
 )
 
-# 최신 임베딩 모델로 변경 (차원 축소 완벽 지원)
-MODEL_NAME = "models/embedding-001" 
+MODEL_NAME = "text-embedding-004" 
 
 # ==========================================
 # 1. Vibe 텍스트 -> 벡터 변환 함수

@@ -9,7 +9,7 @@ class VibeSearchAgent:
     def __init__(self, user_id: int):
         load_dotenv()
         self.api_key = os.environ.get("GOOGLE_API_KEY")
-        self.my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+        self.my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
         self.client = genai.Client(
             api_key=self.api_key,
             http_options=types.HttpOptions(
