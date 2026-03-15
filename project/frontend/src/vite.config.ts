@@ -1,30 +1,30 @@
-import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"
-import tailwindcss from "@tailwindcss/vite"
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import {defineConfig, loadEnv} from 'vite';
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-    host: true,
-    port: 5173,
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",  
-        changeOrigin: true,
-        secure: false,
-        ws: true,
-        configure: (proxy) => {
-          proxy.on("error", (err) => {
-            console.log("proxy error", err)
-          })
-          proxy.on("proxyReq", (proxyReq, req) => {
-            console.log("➡️  Proxy Request:", req.method, req.url)
-          })
-          proxy.on("proxyRes", (proxyRes, req) => {
-            console.log("⬅️  Proxy Response:", proxyRes.statusCode, req.url)
-          })
-        }
-      }
-    }
-  }
-})
+export default defineConfig(({mode}) => {
+  const env = loadEnv(mode, '.', '');
+  return {
+    plugins: [react(), tailwindcss()],
+    define: {
+      'process.env.GOOGLE_API_KEY': JSON.stringify(env.GOOGLE_API_KEY),
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    server: {
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+      },
+    },
+  };
+});

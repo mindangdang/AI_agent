@@ -72,13 +72,16 @@ export default function App() {
 
   const fetchItems = async () => {
     if (!user) return;
+
     try {
+
       const res = await fetch(`/api/items?user_id=${user.id}`);
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
+      const text = await res.text();
+
+      console.log("API raw response:", text);
+
     } catch (error) {
       console.error("Failed to fetch items:", error);
-      setItems([]);
     }
   };
 
