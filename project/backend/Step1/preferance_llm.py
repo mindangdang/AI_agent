@@ -75,7 +75,7 @@ def fetch_user_data_from_neon(user_id: int):
 
         query = """
             SELECT extracted_data 
-            FROM user_saved_posts 
+            FROM saved_posts 
             WHERE user_id = %s
             ORDER BY created_at DESC
             LIMIT 20; -- 너무 많으면 토큰 낭비이므로 최근/핵심 데이터 20개로 제한

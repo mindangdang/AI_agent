@@ -40,7 +40,7 @@ def fetch_similar_items_from_neon(user_id: int, query_vector: list[float], limit
         # 코사인 거리 연산자(<=>)로 의미론적 유사도가 높은 상위 N개 추출
         query = """
             SELECT extracted_data 
-            FROM user_saved_posts 
+            FROM saved_posts 
             WHERE user_id = %s
             ORDER BY text_embedding <=> %s::vector
             LIMIT %s;
