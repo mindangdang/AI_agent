@@ -28,6 +28,7 @@ export interface SavedItem {
   url: string;
   category: string;
   facts: any;
+  reviews?: any; 
   vibe: string;
   image_url: string;
   created_at: string;
@@ -72,16 +73,13 @@ export default function App() {
 
   const fetchItems = async () => {
     if (!user) return;
-
     try {
-
       const res = await fetch(`/api/items?user_id=${user.id}`);
-      const text = await res.text();
-
-      console.log("API raw response:", text);
-
+      const data = await res.json(); 
+      setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch items:", error);
+      setItems([]);
     }
   };
 
@@ -102,7 +100,6 @@ export default function App() {
     if (!newUrl || !user) return;
     setLoading(true);
     try {
-      // 1. URL 추출 API 호출
       const res = await fetch('/api/extract-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,23 +110,19 @@ export default function App() {
         const error = await res.json();
         throw new Error(error.detail || "Failed to analyze URL");
       }
-
       setNewUrl("");
-      await fetchItems();
-      
-      // 2. 취향 업데이트 API 심플하게 호출 (서버가 알아서 DB 뒤져서 갱신)
-      const tasteRes = await fetch('/api/generate-taste', {
-        method: 'POST'
-      });
-      const tasteData = await tasteRes.json();
-      if (tasteData.success) {
-        setTaste(tasteData.summary);
-      }
-      
     } catch (error: any) {
       console.error(error);
-      alert(error.message);
+      alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
     } finally {
+      await fetchItems();
+   
+      try {
+        const tasteRes = await fetch('/api/generate-taste', { method: 'POST' });
+        const tasteData = await tasteRes.json();
+        if (tasteData.success) setTaste(tasteData.summary);
+      } catch (e) { console.error("Taste update failed"); }
+      
       setLoading(false);
     }
   };
@@ -148,7 +141,6 @@ export default function App() {
     // Removed logout logic
   };
 
-  // Removed user check for Auth component
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +151,7 @@ export default function App() {
     setFeedbackReason("");
     setShowFeedbackReason(false);
     try {
-      // 에이전틱 검색 API 호출 (검색어 하나만 던져도 서버가 알아서 맥락 파악)
+
       const res = await fetch('/api/agent-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -670,6 +662,28 @@ export default function App() {
                         <p className="text-sm text-gray-400 italic">No detailed facts available.</p>
                       )}
                     </div>
+                  </section>
+
+                  <section className="mt-6 border-t pt-6">
+                    <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-3">Review Insights</h3>
+                    {selectedItem.reviews && (selectedItem.reviews.star_review || selectedItem.reviews.core_summary) ? (
+                      <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100">
+                        <div className="flex items-center gap-1 mb-2">
+                          <span className="text-sm font-bold text-yellow-600">
+                            {selectedItem.reviews.star_review || "No rating"}
+                          </span>
+                          <div className="flex text-yellow-400">
+                            {/* 별점 시각화 (간이) */}
+                            {"★".repeat(Math.floor(parseFloat(selectedItem.reviews.star_review) || 0))}
+                          </div>
+                        </div>
+                        <p className="text-xs leading-relaxed text-gray-600 italic">
+                          "{selectedItem.reviews.core_summary}"
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">No review data extracted for this item.</p>
+                    )}
                   </section>
 
                   {selectedItem.url && (
