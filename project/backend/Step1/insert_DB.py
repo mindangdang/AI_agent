@@ -12,10 +12,21 @@ neon_url = os.environ.get("NEON_DB_URL")
 google_api_key = os.environ.get("GOOGLE_API_KEY")
 
 # 구글 API 클라이언트 초기화
-client = genai.Client(api_key=google_api_key)
+load_dotenv()
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+
+my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(
+        base_url=my_proxy_url
+    )
+)
 
 # 최신 임베딩 모델로 변경 (차원 축소 완벽 지원)
-MODEL_NAME = "text-embedding-001" 
+MODEL_NAME = "models/embedding-001" 
 
 # ==========================================
 # 1. Vibe 텍스트 -> 벡터 변환 함수
@@ -27,9 +38,9 @@ def get_vibe_vector(text: str):
     try:
         response = client.models.embed_content(
             model=MODEL_NAME,
-            contents=text, # 리스트가 아닌 단일 텍스트 문자열 그대로 전달
+            contents=text, 
             config=types.EmbedContentConfig(
-                output_dimensionality=768  # gemini-embedding-001도 768차원 축소 완벽 지원
+                output_dimensionality=768  
             )
         )
         return response.embeddings[0].values
@@ -49,14 +60,12 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
         register_vector(conn)  
         cursor = conn.cursor()
 
-
         insert_query = """
             INSERT INTO saved_posts 
             (user_id, source_url, category, summary_text, vibe_text, vibe_vector, facts)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (source_url, category) DO NOTHING; 
         """
-
         for item in extracted_items:
             category = item.get("category")
             summary_text = item.get("summary_text")
