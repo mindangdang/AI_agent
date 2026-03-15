@@ -22,7 +22,13 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-client = genai.Client(api_key=api_key)
+my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(
+        base_url=my_proxy_url
+    )
+)
 
 '''
 print(" CLIP 모델을 로드하는 중입니다... (최초 1회)")

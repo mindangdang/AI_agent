@@ -135,7 +135,18 @@ def analyze_vibe(user_id: int):
 """
     
     # Gemini API 호출 설정
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    load_dotenv()
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+
+    my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            base_url=my_proxy_url
+        )
+    )
     
     try:
         response = client.models.generate_content(

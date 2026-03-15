@@ -14,9 +14,15 @@ NEON_DB_URL = os.environ.get("NEON_DB_URL")
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
-    raise ValueError("⚠️ .env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-client = genai.Client(api_key=api_key)
+my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(
+        base_url=my_proxy_url
+    )
+)
 
 # ===================================================================
 # Helper Function (DB Fetch)
@@ -135,5 +141,5 @@ def expand_search_queries(user_query: str, vibe_context: str) -> list[str]:
         return [f"Error generating queries: {str(e)}"]
 
 if __name__ == "__main__":
-    print("🚀 Vibe Search Vector MCP Server is running...")
+    print(" Vibe Search Vector MCP Server is running...")
     mcp.run()

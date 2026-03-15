@@ -9,6 +9,13 @@ class VibeSearchAgent:
     def __init__(self, user_id: int):
         load_dotenv()
         self.api_key = os.environ.get("GOOGLE_API_KEY")
+        self.my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev/" 
+        self.client = genai.Client(
+            api_key=self.api_key,
+            http_options=types.HttpOptions(
+                base_url=self.my_proxy_url
+            )
+        )
         self.client = genai.Client(api_key=self.api_key)
         self.user_id = user_id
         
@@ -34,7 +41,7 @@ class VibeSearchAgent:
 
     def _get_embedding(self, text: str) -> list[float]:
         response = self.client.models.embed_content(
-            model='gemini-embedding-001', # 404 에러가 나던 모델명 수정
+            model='gemini-embedding-001', 
             contents=text,
             config=types.EmbedContentConfig(
                 output_dimensionality=768 # DB 스키마(768차원)와 강제 동기화
@@ -57,7 +64,7 @@ class VibeSearchAgent:
             query_vector=query_vector, 
             user_id=self.user_id
         )
-        print(f"      => 💡 도출된 취향: {vibe_context}")
+        print(f"      => 도출된 취향: {vibe_context}")
         
         # 3. 쿼리 확장 (MCP 2 호출)
         print("   [Step 3] 검색 엔진 노이즈를 걷어낼 Dorks(검색어)를 설계합니다...")
@@ -67,16 +74,16 @@ class VibeSearchAgent:
             vibe_context=vibe_context
         )
         
-        # 💡 2. 텍스트를 파이썬 리스트 구조로 다시 변환합니다.
+        # 2. 텍스트를 파이썬 리스트 구조로 다시 변환합니다.
         try:
             expanded_queries = json.loads(expanded_queries_str)
         except json.JSONDecodeError:
             # (만약 LLM이 JSON 형식을 어겼을 경우를 대비한 안전 장치)
             expanded_queries = [expanded_queries_str] 
 
-        # 💡 3. 정상적인 리스트가 되었으므로, 이제 한 줄씩 예쁘게 출력됩니다.
+        #  3. 정상적인 리스트가 되었으므로, 이제 한 줄씩 예쁘게 출력됩니다.
         for q in expanded_queries:
-            print(f"      => 🔍 Dork: {q}")
+            print(f"      =>  Dork: {q}")
             
         # 4. 구글 검색을 통한 최종 큐레이션 (Gemini Search Grounding)
         print("   [Step 4] 제미나이가 구글 웹 검색을 수행하고 최종 답변을 큐레이팅합니다...")
@@ -105,8 +112,8 @@ class VibeSearchAgent:
 
     def run(self, user_query: str) -> str:
         """메인 에이전트 라우팅 및 실행"""
-        print(f"\n🎯 [User Query] '{user_query}'")
-        print("🧠 에이전트가 질문의 성격을 판단 중입니다...")
+        print(f"\n [User Query] '{user_query}'")
+        print("에이전트가 질문의 성격을 판단 중입니다...")
         
         # 제미나이에게 도구 설명서를 쥐여주고 판단을 맡깁니다.
         response = self.client.models.generate_content(
@@ -122,11 +129,11 @@ class VibeSearchAgent:
         if response.function_calls:
             for function_call in response.function_calls:
                 if function_call.name == "trigger_vibe_search":
-                    print("✅ [판단 결과] 이 질문은 개인의 '취향 분석'이 필요합니다. Vibe Search를 가동합니다.\n")
+                    print("[판단 결과] 이 질문은 개인의 '취향 분석'이 필요합니다. Vibe Search를 가동합니다.\n")
                     return self._execute_vibe_pipeline(user_query)
         
         # 도구를 호출하지 않은 경우 (일반적인 대화나 단순 정보 검색)
-        print("✅ [판단 결과] 단순 지식/대화형 질문입니다. 즉시 답변을 생성합니다.\n")
+        print(" [판단 결과] 단순 지식/대화형 질문입니다. 즉시 답변을 생성합니다.\n")
         
         # 구글 검색만 켜서 일반적인 답변 제공
         standard_response = self.client.models.generate_content(
@@ -148,9 +155,9 @@ if __name__ == "__main__":
     # 케이스 1: 취향 분석이 필요한 질문 (Vibe Search 파이프라인 가동됨)
     print("\n--- [Test Case 1] ---")
     answer1 = agent.run("이번 주말에 서촌에서 책 읽을 만한 조용한 카페 추천해 줘")
-    print("\n✨ [최종 결과]\n", answer1)
+    print("\n [최종 결과]\n", answer1)
     
     # 케이스 2: 취향 분석이 필요 없는 일반 질문 (바로 답변함)
     print("\n--- [Test Case 2] ---")
     answer2 = agent.run("서촌은 어느 구에 위치해 있어?")
-    print("\n✨ [최종 결과]\n", answer2)
+    print("\n [최종 결과]\n", answer2)

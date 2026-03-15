@@ -8,12 +8,11 @@ from mcp.client.stdio import stdio_client
 async def call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
     """MCP 서버와 연결하여 특정 도구를 실행하고 결과를 받아옵니다."""
     
-    # 💡 1. 현재 파일(mcp_client.py)의 절대 경로를 구해서 서버 파일의 위치를 정확히 고정합니다.
+    #  1. 현재 파일(mcp_client.py)의 절대 경로를 구해서 서버 파일의 위치를 정확히 고정합니다.
     current_dir = os.path.dirname(os.path.abspath(__file__))
     server_path = os.path.join(current_dir, "mcp_server.py")
     
-    # 💡 2. 그냥 "python"을 호출하지 않고, 현재 실행 중인 파이썬 환경의 경로를 그대로 가져옵니다.
-    # (이렇게 하면 Codespaces나 가상환경에서 모듈을 못 찾는 에러를 원천 차단합니다)
+    #  2. 그냥 "python"을 호출하지 않고, 현재 실행 중인 파이썬 환경의 경로를 그대로 가져옵니다.
     python_executable = sys.executable
     
     server_params = StdioServerParameters(
