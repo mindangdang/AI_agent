@@ -1,24 +1,30 @@
 import os
 from openai import OpenAI
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
-token = os.environ.get("GITHUB_TOKEN") 
+def llm_model(kind):
+    if kind == 'gemini':
+        load_dotenv()
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-client = OpenAI(
-    base_url="https://models.inference.ai.azure.com", # GitHub Models 엔드포인트
-    api_key=token,
-)
+        my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
+        client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                base_url=my_proxy_url
+            )
+        )
+        return client
+    
+    elif kind == 'llama':
+        token = os.environ.get("GITHUB_TOKEN") 
 
-response = client.chat.completions.create(
-    messages=[
-        {
-            "role": "user",
-            "content": "Vibe Search 프로젝트 테스트 중입니다. 모델 응답 확인!",
-        }
-    ],
-    model="gpt-4o", # 쓰고 싶은 모델명 (gpt-4o, Llama-3.3-70b-Instruct 등)
-    temperature=1,
-    max_tokens=2048,
-    top_p=1
-)
-
-print(response.choices[0].message.content)
+        client = OpenAI(
+            base_url="https://models.inference.ai.azure.com", # GitHub Models 엔드포인트
+            api_key=token,
+        )
+        return client
