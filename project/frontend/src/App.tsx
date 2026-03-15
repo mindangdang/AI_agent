@@ -75,8 +75,11 @@ export default function App() {
     if (!user) return;
     try {
       const res = await fetch(`/api/items?user_id=${user.id}`);
-      const data = await res.json(); 
+      const data = await res.json();
+      
+      // API 응답이 배열인지 확인 후 상태 업데이트
       setItems(Array.isArray(data) ? data : []);
+      console.log("Items updated:", data);
     } catch (error) {
       console.error("Failed to fetch items:", error);
       setItems([]);
@@ -633,34 +636,37 @@ export default function App() {
                   <section>
                     <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-3">Extracted Information</h3>
                     <div className="grid grid-cols-1 gap-3">
-                      {selectedItem.facts && typeof selectedItem.facts === 'object' ? (
-                        Object.entries(selectedItem.facts).map(([key, value]) => (
-                          <div key={key} className="group/fact">
-                            <dt className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1 group-hover/fact:text-black transition-colors">
-                              {key.replace(/_/g, ' ')}
-                            </dt>
-                            <dd className="text-sm text-gray-800 bg-gray-50/50 p-3 rounded-xl border border-gray-100 group-hover/fact:bg-white group-hover/fact:border-gray-200 transition-all">
-                              {Array.isArray(value) ? (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {value.map((val, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-white border border-gray-200 rounded-md text-[11px] font-medium text-gray-600">
-                                      {String(val)}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : typeof value === 'object' && value !== null ? (
-                                <pre className="text-[11px] font-mono overflow-x-auto">
-                                  {JSON.stringify(value, null, 2)}
-                                </pre>
-                              ) : (
-                                <span className="font-medium">{String(value)}</span>
-                              )}
-                            </dd>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-400 italic">No detailed facts available.</p>
-                      )}
+                      {(() => {
+                        // facts가 문자열일 경우를 대비해 파싱 시도
+                        const facts = typeof selectedItem.facts === 'string' 
+                          ? JSON.parse(selectedItem.facts) 
+                          : selectedItem.facts;
+
+                        return facts && typeof facts === 'object' ? (
+                          Object.entries(facts).map(([key, value]) => (
+                            <div key={key} className="group/fact">
+                              <dt className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                {key.replace(/_/g, ' ')}
+                              </dt>
+                              <dd className="text-sm text-gray-800 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                                {Array.isArray(value) ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {value.map((val, i) => (
+                                      <span key={i} className="px-2 py-0.5 bg-white border border-gray-200 rounded-md text-[11px]">
+                                        {String(val)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="font-medium">{String(value)}</span>
+                                )}
+                              </dd>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-400 italic">No detailed facts available.</p>
+                        );
+                      })()}
                     </div>
                   </section>
 
