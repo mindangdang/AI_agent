@@ -25,7 +25,7 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 '''
-print("⚙️ CLIP 모델을 로드하는 중입니다... (최초 1회)")
+print(" CLIP 모델을 로드하는 중입니다... (최초 1회)")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
 clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -114,7 +114,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     contents = [prompt_ocr] + images + [text_input]
 
     response_ocr = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash-lite",
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -134,10 +134,10 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         try:
             # LLM이 매핑해준 슬라이드 인덱스를 바탕으로 원본 이미지 선택
             target_image = images[item.image_index]
-            print(f"🎨 '{title}'의 시각적 바이브(Slide {item.image_index})를 임베딩합니다...")
+            print(f" '{title}'의 시각적 바이브(Slide {item.image_index})를 임베딩합니다...")
             item.image_embedding = get_image_embedding(target_image)
         except Exception as e:
-            print(f"⚠️ '{title}' 이미지 임베딩 실패: {e}")
+            print(f" '{title}' 이미지 임베딩 실패: {e}")
             # 매핑에 실패한 경우 안전하게 첫 번째 이미지를 기본값으로 사용
             pass
         '''
@@ -147,7 +147,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
             item.reviews = None 
             continue
 
-        print(f"🔍 '{title}'에 대한 실시간 리뷰를 검색합니다...")
+        print(f" '{title}'에 대한 실시간 리뷰를 검색합니다...")
 
         prompt_review = f"""
         너는 주어진 이름만 갖고 구글 검색을 통해 그 대상의 객관적인 평가와 유용한 리뷰 정보를 모아오는 세계 최고의 데이터 수집가야.
@@ -170,7 +170,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
 
         try:
             response_review = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.0-flash-lite',
                 contents=prompt_review,
                 config=types.GenerateContentConfig(
                     tools=[{"google_search": {}}], 
@@ -186,11 +186,11 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
             item.reviews = Review(**parsed_dict)
             
         except Exception as e:
-            print(f"⚠️ '{title}' 리뷰 검색 중 에러 발생: {e}")
+            print(f" '{title}' 리뷰 검색 중 에러 발생: {e}")
             item.reviews = None 
             
         time.sleep(15) # Google Search API Rate Limit 방어
 
-    print("🎉 모든 데이터 추출, 임베딩 및 조립 완료!")
+    print(" 모든 데이터 추출, 임베딩 및 조립 완료!")
     return extracted_data.model_dump()
 
