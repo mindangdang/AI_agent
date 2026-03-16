@@ -24,6 +24,11 @@ from project.backend.Step2.main_agent import VibeSearchAgent
 
 app = FastAPI()
 
+# insta_vibes 폴더를 생성하고 정적 파일을 /api/images/...로 서빙합니다.
+if not os.path.exists("insta_vibes"):
+    os.makedirs("insta_vibes")
+app.mount("/api/images", StaticFiles(directory="insta_vibes"), name="images")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -49,16 +54,23 @@ def init_db():
         id SERIAL PRIMARY KEY,
         user_id TEXT,
         source_url TEXT,
-        title TEXT,                
+        title TEXT,
         category TEXT,
         summary_text TEXT,
+        image_url TEXT,
         vibe_text TEXT,
         vibe_vector vector(768),
         facts JSONB,
         reviews JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(source_url, title)  
+        UNIQUE(source_url, title)
       );
+    """)
+
+    # 기존 테이블에 image_url 컬럼이 없을 경우 추가
+    cursor.execute("""
+      ALTER TABLE saved_posts
+      ADD COLUMN IF NOT EXISTS image_url TEXT;
     """)
     
     cursor.execute("""
@@ -102,6 +114,7 @@ class ManualItemCreate(BaseModel):
     vibe: str
     facts: dict
     url: str
+    image_url: Optional[str] = ""
 
 
 # [API 1] 크롤링 & 데이터 추출
@@ -144,7 +157,16 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
         return {"success": False, "message": "일부 아이템 분석 실패", "data": []}
 
     extracted_items = ai_result.get("extracted_items", [])
-    
+
+    # 이미지 파일명(또는 경로)을 각 추출 항목에 주입하여 프론트에서 /api/images/ 경로로 접근할 수 있도록 합니다.
+    for item in extracted_items:
+        try:
+            image_index = int(item.get("image_index", 0) or 0)
+            image_path = downloaded_files[image_index] if image_index < len(downloaded_files) else None
+            item["image_url"] = os.path.basename(image_path) if image_path else ""
+        except Exception:
+            item["image_url"] = ""
+
     try:
         user_id = "1" 
         insert_items_to_db(user_id, post_url, extracted_items)
@@ -152,9 +174,10 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
         print(f"DB 저장 중 에러 발생: {e}")
         return {"success": True, "message": "DB 저장 중 오류가 있었으나 데이터는 추출됨", "data": extracted_items}
 
-    for file_path in downloaded_files:
-        try: os.remove(file_path)
-        except: pass
+    # NOTE: 이미지를 로컬에 저장한 상태로 서빙하기 때문에 삭제하지 않습니다.
+    # for file_path in downloaded_files:
+    #     try: os.remove(file_path)
+    #     except: pass
 
     return {"success": True, "message": f"총 {len(extracted_items)}개 추출 완료", "data": extracted_items}
 
@@ -223,8 +246,8 @@ def save_manual_item(request: ManualItemCreate):
     cursor = conn.cursor()
     try:
         cursor.execute(
-            """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, reviews, title) 
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, reviews, title, image_url) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 str(request.user_id), 
                 request.url, 
@@ -232,7 +255,8 @@ def save_manual_item(request: ManualItemCreate):
                 request.vibe, 
                 json.dumps(request.facts, ensure_ascii=False),
                 json.dumps(request.facts.get("reviews", {}), ensure_ascii=False), 
-                request.facts.get("title", "Manual Item")
+                request.facts.get("title", "Manual Item"),
+                request.image_url or ""
             )
         )
         conn.commit()
@@ -259,7 +283,8 @@ def get_items(user_id: str = "1"):
                 category, 
                 facts, 
                 vibe_text as vibe, 
-                summary_text as image_url, 
+                image_url, 
+                summary_text, 
                 created_at 
             FROM saved_posts 
             WHERE user_id = %s OR user_id = 'default_user'

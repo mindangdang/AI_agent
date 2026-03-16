@@ -55,24 +55,27 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
     cursor = None 
     
     try:
-        conn = psycopg2.connect(neon_url)
+        conn = psycopg2.connect(neon_url) 
         register_vector(conn)  
         cursor = conn.cursor()
 
         insert_query = """
             INSERT INTO saved_posts 
-            (user_id, source_url, title, category, summary_text, vibe_text, vibe_vector, facts, reviews)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (user_id, source_url, title, category, summary_text, image_url, vibe_text, vibe_vector, facts, reviews)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (source_url, title) DO NOTHING; 
         """
 
         for item in extracted_items:
             category = item.get("category")
             summary_text = item.get("summary_text")
+            image_url = item.get("image_url") or item.get("local_path") or ""
+            
             vibe_text = item.get("vibe_text", "")
             facts_data = item.get("facts", {})
             title = facts_data.get("title", "Unknown Item")
             reviews_data = item.get("reviews", {})
+            
             reviews_json = json.dumps(reviews_data, ensure_ascii=False)
             facts_json = json.dumps(facts_data, ensure_ascii=False)
             vibe_vector = get_vibe_vector(vibe_text)
@@ -82,7 +85,8 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
                 source_url, 
                 title,         
                 category, 
-                summary_text, 
+                summary_text,
+                image_url,
                 vibe_text, 
                 vibe_vector, 
                 facts_json,
@@ -90,7 +94,7 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
             ))
 
         conn.commit()
-        print(f"DB 저장 완료: {len(extracted_items)}개의 아이템 처리됨")
+        print(f"DB 저장 완료: {len(extracted_items)}개의 아이템 처리됨 (이미지 경로: {image_url})")
         
     except Exception as e:
         print(f" DB 저장 중 에러 발생: {e}")

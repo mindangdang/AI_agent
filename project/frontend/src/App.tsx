@@ -335,10 +335,13 @@ export default function App() {
                     className="break-inside-avoid group relative bg-white rounded-xl overflow-hidden border border-[#DBDBDB] hover:shadow-xl transition-all duration-300 cursor-pointer"
                   >
                     <img
-                      src={item.image_url}
+                      src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=Image+Not+Found'}
                       alt={item.category}
                       className="w-full h-auto object-cover"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=Image+Not+Found';
+                      }}
                     />
                     <div className="p-3 space-y-1">
                       <div className="flex items-center justify-between">
@@ -634,10 +637,13 @@ export default function App() {
             >
               <div className="md:w-1/2 bg-gray-100 flex items-center justify-center overflow-hidden">
                 <img 
-                  src={selectedItem.image_url} 
+                  src={selectedItem.image_url ? `/api/images/${selectedItem.image_url}` : 'https://via.placeholder.com/600x600?text=No+Image'} 
                   alt={selectedItem.category}
                   className="w-full h-full object-contain"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x600?text=No+Image';
+                  }}
                 />
               </div>
               <div className="md:w-1/2 p-6 flex flex-col">
