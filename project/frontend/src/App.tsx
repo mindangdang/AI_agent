@@ -610,9 +610,12 @@ export default function App() {
                       onClick={() => setSelectedItem(item)}
                     >
                       <img 
-                        src={item.image_url} 
+                        src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=Image+Not+Found'}
                         className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 ease-in-out group-hover:scale-105" 
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=Image+Not+Found';
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
                     </div>

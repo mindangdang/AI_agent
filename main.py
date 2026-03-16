@@ -72,6 +72,12 @@ def init_db():
       ALTER TABLE saved_posts
       ADD COLUMN IF NOT EXISTS image_url TEXT;
     """)
+
+    # 기존 테이블에 reviews 컬럼이 없을 경우 추가
+    cursor.execute("""
+      ALTER TABLE saved_posts
+      ADD COLUMN IF NOT EXISTS reviews JSONB;
+    """)
     
     cursor.execute("""
       CREATE TABLE IF NOT EXISTS taste_profile (
@@ -208,15 +214,13 @@ def generate_taste_profile():
         # 피드에 아이템이 있는지 확인
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1' OR user_id = 'default_user'")
+        cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
         count = cursor.fetchone()[0]
         cursor.close()
         conn.close()
 
         if count == 0:
             return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
-
-        from project.backend.Step1.preferance_llm import analyze_vibe
         summary = analyze_vibe(user_id=1)  # user_id를 정수로 전달
         if not summary:
             return {"success": False, "message": "취향 분석에 실패했습니다."}
