@@ -62,46 +62,43 @@ SYSTEM_PROMPT = """
 제공된 데이터(ex:아크테릭스 바람막이를 좋아하는 걸로 봐서~)는 답변에 절대 언급하지 마라.
 
 """
-
 # ==========================================
-# 3. 데이터 로드 및 포맷팅 함수
+# 3. 데이터 로드 및 포맷팅 함수 (수정됨)
 # ==========================================
 def fetch_user_data_from_neon(user_id: int):
     try:
-        # DB 연결
         conn = psycopg2.connect(NEON_DB_URL)
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
         query = """
-            SELECT facts, reviews, vibe_text, category, title
+            SELECT facts, reviews, vibe_text, category, title, summary_text
             FROM saved_posts
             WHERE user_id = %s
             ORDER BY created_at DESC
-            LIMIT 20; -- 너무 많으면 토큰 낭비이므로 최근/핵심 데이터 20개로 제한
+            LIMIT 20;
         """
-        cur.execute(query, (user_id,))
+        cur.execute(query, (str(user_id),))
         rows = cur.fetchall()
         
         cur.close()
         conn.close()
-        
-        # 데이터 추출
         return rows
         
     except Exception as e:
-        print(f"Neon DB 연결 또는 쿼리 실패: {e}")
+        print(f"DB 조회 실패: {e}")
         return []
 
 def format_data_for_prompt(items: list) -> str:
     formatted_posts = []
     
     for idx, item in enumerate(items, 1):
-        facts = item.get("facts", {})
+        facts = item.get("facts") or {}
         title = facts.get("title", "알 수 없음")
         location = facts.get("location_text", "위치 정보 없음")
         key_details = facts.get("key_details", [])
         details_str = ", ".join(key_details) if key_details else "특징 없음"
-        reviews = item.get("reviews", {})
+        
+        reviews = item.get("reviews") or {}
         star_review = reviews.get("star_review", "")
         core_summary = reviews.get("core_summary", "")
 
@@ -119,7 +116,7 @@ def format_data_for_prompt(items: list) -> str:
     return "\n\n".join(formatted_posts)
 
 # ==========================================
-# 4. LLM 분석 실행 함수
+# 4. LLM 분석 실행 함수 (수정됨)
 # ==========================================
 def analyze_vibe(user_id: int):
     raw_items = fetch_user_data_from_neon(user_id)
@@ -137,7 +134,6 @@ def analyze_vibe(user_id: int):
 {post_data_string}
 """
     
-    # Gemini API 호출 설정
     load_dotenv()
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
@@ -160,16 +156,8 @@ def analyze_vibe(user_id: int):
                 temperature=0.7, 
             ),
         )
-        
         return response.text
     except Exception as e:
-         print(f"LLM 호출 중 오류 발생: {e}")
+         # 여기서 에러가 나면 터미널에 확실히 빨간불이 켜지게 로그 강화
+         print(f"LLM 프로필 생성 중 오류 발생: {e}") 
          return None
-
-# ==========================================
-# 실행부
-# ==========================================
-if __name__ == "__main__":
-    # 테스트할 사용자의 ID를 입력하세요.
-    TEST_USER_ID = 1 
-    analyze_vibe(TEST_USER_ID)
