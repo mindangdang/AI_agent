@@ -101,7 +101,7 @@ class VibeSearchAgent:
         """
         
         response = self.client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=[{"google_search": {}}], # 구글 검색 도구 활성화
@@ -117,7 +117,7 @@ class VibeSearchAgent:
         
         # 제미나이에게 도구 설명서를 쥐여주고 판단을 맡깁니다.
         response = self.client.models.generate_content(
-            model='gemini-2.5-flash-lite', # 라우팅 판단은 빠르고 저렴한 flash 모델 사용 권장
+            model='gemini-2.5-flash', # 라우팅 판단은 빠르고 저렴한 flash 모델 사용 권장
             contents=user_query,
             config=types.GenerateContentConfig(
                 tools=self.tools,
@@ -137,7 +137,7 @@ class VibeSearchAgent:
         
         # 구글 검색만 켜서 일반적인 답변 제공
         standard_response = self.client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model='gemini-2.5-flash',
             contents=user_query,
             config=types.GenerateContentConfig(
                 tools=[{"google_search": {}}] 

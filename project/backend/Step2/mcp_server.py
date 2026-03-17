@@ -97,7 +97,7 @@ def get_taste_context(user_query: str, query_vector: list[float], user_id: int) 
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model='gemini-2.5-flash',
             contents=prompt,
         )
         return response.text
@@ -130,7 +130,7 @@ def expand_search_queries(user_query: str, vibe_context: str) -> list[str]:
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
