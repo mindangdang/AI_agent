@@ -79,7 +79,7 @@ export default function App() {
   const fetchItems = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/items?user_id=${user.id}`);
+      const res = await fetch(`/api/items?user_id=${user.id}`, { cache: 'no-store' });
       const data = await res.json();
       
       // API 응답이 배열인지 확인 후 상태 업데이트
@@ -94,7 +94,7 @@ export default function App() {
   const fetchTaste = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/taste?user_id=${user.id}`);
+      const res = await fetch(`/api/taste?user_id=${user.id}`, { cache: 'no-store' });
       const data = await res.json();
       setTaste(data?.summary || "");
     } catch (error) {
@@ -219,7 +219,7 @@ export default function App() {
       });
       setShowFeedbackReason(false);
       setFeedbackReason("");
-      await fetchTaste(); // 👈 피드백 제출 후 취향 프로필 새로고침
+      await fetchTaste(); // 피드백 제출 후 취향 프로필 새로고침
     } catch (error) {
       console.error("Failed to submit feedback:", error);
     }
