@@ -8,9 +8,7 @@ import os
 import json
 from dotenv import load_dotenv
 from fastapi.encoders import jsonable_encoder
-
-load_dotenv()
-
+import uuid
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
@@ -23,6 +21,7 @@ from project.backend.Step1.preferance_llm import analyze_vibe
 from project.backend.Step2.main_agent import VibeSearchAgent          
 
 app = FastAPI()
+load_dotenv()
 
 # insta_vibes 폴더를 생성하고 정적 파일을 /api/images/...로 서빙합니다.
 if not os.path.exists("insta_vibes"):
@@ -151,7 +150,17 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     if not crawl_result or crawl_result.get("error"):
         raise HTTPException(status_code=400, detail=f"크롤링 실패: {crawl_result.get('error')}")
 
-    downloaded_files = download_images(crawl_result.get("image_urls", []), save_dir="insta_vibes")
+    raw_downloaded_files = download_images(crawl_result.get("image_urls", []), save_dir="insta_vibes")
+    downloaded_files = []
+    
+    # 다운로드된 파일들에 절대 겹치지 않는 랜덤 이름(UUID) 부여
+    for old_path in raw_downloaded_files:
+        if os.path.exists(old_path):
+            ext = os.path.splitext(old_path)[1] or '.jpg'
+            new_filename = f"{uuid.uuid4().hex}{ext}"
+            new_path = os.path.join("insta_vibes", new_filename)
+            os.rename(old_path, new_path)
+            downloaded_files.append(new_path)
     try:
         ai_result = extract_fact_and_vibe(
             image_paths=downloaded_files, 
