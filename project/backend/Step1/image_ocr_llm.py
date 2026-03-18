@@ -97,8 +97,8 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     제공된 '이미지(순서대로)'들과 '텍스트(캡션+해시태그)'를 종합적으로 분석해.
 
     [핵심 분석 사고 과정 (Chain of Thought)]
-    1. 노이즈 필터링: 썸네일(보통 첫번째 사진,표지)이나 마지막 인사말(아웃트로) 등 실제 정보가 없는 슬라이드는 객체로 인식하지 말고 무시해. 제공된 이미지 수와 실제 소개하는 대상(Item)의 수는 다를 수 있다는 점을 인지해.
-    2. 순차적 기준점 추적 (Sequential Tracking): 첫 번째로 등장하는 유의미한 '상호명, 상품명, 또는 주제(Anchor)'를 찾아내. 그 순간부터 등장하는 모든 시각적 특징과 텍스트 설명은 해당 대상의 정보로 수집해.
+    1. 노이즈 필터링: 썸네일(보통 첫번째 사진,표지)이나 마지막 아웃트로 등 유의미한 정보가 없는 슬라이드는 객체로 인식하지 말고 무시해. 제공된 이미지 수와 실제 소개하는 대상(Item)의 수는 다를 수 있다는 점을 인지해.
+    2. 순차적 기준점 추적 (Sequential Tracking): 사진속 글씨에서 첫 번째로 등장하는 유의미한 '상호명, 상품명, 또는 주제(Anchor)'를 찾아내. 그 순간부터 등장하는 모든 시각적 특징과 텍스트 설명은 해당 대상의 정보로 수집해.
     3. 교차 검증 (Cross-matching): 캡션에 적힌 설명이 몇 번째 슬라이드의 어떤 대상을 가리키는지 논리적으로 연결해. 이미지 속 글자(OCR)와 캡션의 설명을 결합해서 하나의 완벽한 대상 프로필을 완성해.
     4. 독립적 데이터 분할: 읽어나가다가 새로운 상호명/상품명(다음 Anchor)이 등장하거나, 순번(예: "2.", "두 번째는")이 바뀌면 이전 대상의 정보 수집을 즉시 종료하고 확정해. 대상 간의 정보가 절대 섞이지 않게 마지막 슬라이드까지 순차적으로 반복해.
     5. 각각 독립적인 대상에 대해서 인덱스 번호를 부여해. 이는 이미지 임베딩을 위해 각 이미지에 인덱싱을 해서 순서를 헷갈리게 하지 않기 위한 작업이야.
@@ -120,7 +120,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     contents = [prompt_ocr] + images + [text_input]
 
     response_ocr = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-pro",
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -176,7 +176,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
 
         try:
             response_review = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.5-flash-lite',
                 contents=prompt_review,
                 config=types.GenerateContentConfig(
                     tools=[{"google_search": {}}], 

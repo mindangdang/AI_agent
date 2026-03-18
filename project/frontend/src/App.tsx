@@ -55,6 +55,7 @@ export default function App() {
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'search' | 'profile'>('feed');
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false); 
+  const [isSharingProfile, setIsSharingProfile] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All'); // 필터용 상태 추가 
 
   // 필터링할 fact 키 목록 (소문자 기준)
@@ -129,7 +130,38 @@ export default function App() {
     } finally {
       setIsGeneratingTaste(false);
     }
+  }; 
+
+  const handleShareProfile = async () => {
+    if (!taste) {
+      alert('먼저 취향 프로필을 생성해 주세요.');
+      return;
+    }
+
+    const shareText = `My VibeSearch 취향 프로필\n\n닉네임: ${user?.username || 'Anonymous'}\n\n${taste}\n\n#VibeSearch #취향프로필 #Aesthetic`;
+
+    setIsSharingProfile(true);
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: '내 취향 프로필',
+          text: shareText,
+        });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareText);
+        alert('취향 프로필 텍스트가 클립보드에 복사되었습니다. 인스타그램에서 붙여넣기 후 공유하세요.');
+        window.open('https://www.instagram.com/', '_blank');
+      } else {
+        alert('공유를 지원하지 않는 환경입니다. 취향 텍스트를 수동으로 복사하여 인스타그램에 공유해주세요.');
+      }
+    } catch (error) {
+      console.error('Profile share failed:', error);
+      alert('프로필 공유 중 오류가 발생했습니다.');
+    } finally {
+      setIsSharingProfile(false);
+    }
   };
+
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -626,7 +658,7 @@ export default function App() {
                       <Markdown>{taste}</Markdown>
                       
                       {/* [프로필이 있을 때] 하단에 '취향 다시 분석하기' 버튼 추가 */}
-                      <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
+                      <div className="mt-12 pt-8 border-t border-gray-100 flex flex-wrap items-center justify-end gap-2">
                         <button 
                           onClick={handleGenerateTaste}
                           disabled={isGeneratingTaste}
@@ -634,6 +666,14 @@ export default function App() {
                         >
                           {isGeneratingTaste ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                           {isGeneratingTaste ? '미학적 패턴 분석 중...' : '취향 다시 분석하기'}
+                        </button>
+                        <button 
+                          onClick={handleShareProfile}
+                          disabled={isSharingProfile}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all border border-blue-700"
+                        >
+                          {isSharingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Instagram className="w-3 h-3" />}
+                          {isSharingProfile ? '공유 준비 중...' : '인스타그램 공유하기'}
                         </button>
                       </div>
                     </div>
