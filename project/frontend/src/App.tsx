@@ -173,7 +173,7 @@ export default function App() {
         throw new Error(error.detail || "Failed to analyze URL");
       }
       
-      // 🌟 Optimistic UI: 응답 데이터 즉시 state에 추가 (새로고침 없음)
+      // Optimistic UI: 응답 데이터 즉시 state에 추가 (새로고침 없음)
       const responseData = await res.json();
       if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
         const newItems = responseData.data.map((item: any, index: number) => ({
@@ -204,7 +204,7 @@ export default function App() {
   const handleDelete = async (id: number) => {
     if (!user) return;
     
-    // 🌟 Optimistic UI: 먼저 UI에서 제거 (즉각 업데이트)
+    // Optimistic UI: 먼저 UI에서 제거 (즉각 업데이트)
     const previousItems = items;
     setItems(items.filter(item => item.id !== id));
     
@@ -444,7 +444,7 @@ export default function App() {
                   >
                     <div className="relative overflow-hidden">
                       <img
-                        src={item.image_url?.startsWith('http') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=POSE+Not+Found'}
+                        src={item.image_url?.startsWith('http') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
                         alt={item.category}
                         className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
                         referrerPolicy="no-referrer"
@@ -772,7 +772,7 @@ export default function App() {
                       onClick={() => setSelectedItem(item)}
                     >
                       <img 
-                        src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
+                        src={item.image_url?.startsWith('http') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
                         className="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110" 
                         referrerPolicy="no-referrer"
                         onError={(e) => {
@@ -808,7 +808,7 @@ export default function App() {
                       : selectedItem.image_url 
                         ? `/api/images/${selectedItem.image_url}` 
                         : 'https://via.placeholder.com/600x600?text=No+Image'
-                  } 
+                  }
                   alt={selectedItem.category}
                   className="w-full h-full object-contain rounded-2xl shadow-sm"
                   referrerPolicy="no-referrer"
