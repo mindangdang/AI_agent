@@ -125,7 +125,7 @@ class ManualItemCreate(BaseModel):
 
 # [API 1] 크롤링 & 데이터 추출
 @app.post("/api/extract-url")
-def extract_and_save_url(request: UrlAnalyzeRequest):
+async def extract_and_save_url(request: UrlAnalyzeRequest):
     post_url = request.url
     session_id = request.session_id
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
@@ -187,7 +187,7 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     
     # case2:인스타 게시물이 아닌 경우
     else:
-        data = scrape_product_metadata(request.url)
+        data = await scrape_product_metadata(request.url)
         if not data:
             raise HTTPException(status_code=400, detail="웹페이지 정보를 가져올 수 없습니다.")
         
