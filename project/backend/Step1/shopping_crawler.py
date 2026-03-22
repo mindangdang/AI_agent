@@ -9,6 +9,7 @@ import httpx
 from playwright.async_api import async_playwright
 
 
+
 # ---  Gemini 폴백 함수 ---
 def fallback_with_gemini(url: str):
     try:
@@ -188,122 +189,7 @@ async def _load_product_page(url: str) -> dict:
             await browser.close()
             
             return {"html": html, "finalUrl": final_url}
-'''
-async def scrape_product_metadata(url: str) -> dict:
-    page_data = await _load_product_page(url)
-    html = page_data["html"]
-    final_url = page_data["finalUrl"]
-    
-    soup = BeautifulSoup(html, 'html.parser')
-    products = _extract_json_ld_products(html)
-    product = products[0] if products else {}
 
-    offers = product.get("offers", {})
-    if isinstance(offers, list):
-        offers = offers[0] if offers else {}
-
-    images = product.get("image", [])
-    if isinstance(images, str):
-        images = [images]
-
-    price = ""
-    currency = ""
-    availability = ""
-
-    if isinstance(offers, dict) and offers:
-        price = _clean_text(str(offers.get("price") or ""))
-        currency = _clean_text(str(offers.get("priceCurrency") or ""))
-        avail_raw = _clean_text(str(offers.get("availability") or ""))
-        availability = avail_raw.split("/")[-1] if avail_raw else ""
-
-    try:
-        # Title 추출
-        title_text = ""
-        title_tag = soup.find("title")
-        if title_tag:
-            title_text = title_tag.get_text(strip=True)
-            
-        title = (_clean_text(product.get("name") or "") or 
-                _extract_meta_content(html, "og:title") or 
-                title_text)
-        
-        # Enhanced image 추출
-        image_url = (_clean_text(images[0] if images else "") or 
-                    _extract_meta_content(html, "og:image") or 
-                    _extract_meta_content(html, "twitter:image") or
-                    _extract_meta_content(html, "image"))
-
-        # 일반적인 상품 이미지 CSS 선택자로 시도
-        if not image_url:
-            common_selectors = [
-                "img[id*='product']", "img[class*='product']", 
-                "img[id*='main']", "img[class*='main']",
-                "img[id*='goods']", "img[class*='goods']",
-                ".product-image img", "#product-image img"
-            ]
-            for selector in common_selectors:
-                img_tag = soup.select_one(selector)
-                if img_tag and img_tag.get("src"):
-                    image_url = img_tag["src"]
-                    break
-
-        # Description 및 Brand 추출
-        description = (_clean_text(product.get("description") or "") or 
-                    _extract_meta_content(html, "og:description") or 
-                    _extract_meta_content(html, "description"))
-        
-        brand = ""
-        if product.get("brand"):
-            if isinstance(product["brand"], dict):
-                brand = _clean_text(product["brand"].get("name") or "")
-            else:
-                brand = _clean_text(str(product["brand"]))
-
-        # 메타 태그에서 가격 정보 2차 시도
-        if not price:
-            price = _extract_meta_content(html, "product:price:amount") or _extract_meta_content(html, "og:price:amount")
-        if not currency:
-            currency = _extract_meta_content(html, "product:price:currency") or _extract_meta_content(html, "og:price:currency")
-
-        # 이미지 URL을 절대 경로로 정규화 (URLJoin 사용)
-        normalized_image_url = urljoin(final_url, image_url) if image_url else ""
-
-        # --- 크롤링 결과가 부실할 때 Gemini 폴백 실행 ---
-        if not title or not normalized_image_url:
-            print("일반 크롤링으로 주요 정보를 찾지 못했습니다. Gemini 폴백을 실행합니다...")
-            gemini_result = fallback_with_gemini(url)
-            if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
-                return gemini_result
-
-        return {
-            "url": final_url,
-            "title": title,
-            "brand": brand,
-            "price": price,
-            "currency": currency,
-            "availability": availability,
-            "image_url": normalized_image_url,
-            "description": description,
-            "source": "json-ld/meta-tags",
-        }
-    except Exception as e:
-        gemini_result = fallback_with_gemini(url)
-        if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
-            return gemini_result
-
-        return {
-            "url": final_url,
-            "title": title,
-            "brand": brand,
-            "price": price,
-            "currency": currency,
-            "availability": availability,
-            "image_url": normalized_image_url,
-            "description": description,
-            "source": "json-ld/meta-tags",
-        }
-
-'''
 async def scrape_product_metadata(url: str) -> dict:
     print(f"[{url}] 메타데이터 추출 시작...")
     

@@ -20,6 +20,7 @@ from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
 from project.backend.Step2.insert_DB import insert_items_to_db 
 from project.backend.Step2.preferance_llm import analyze_vibe
 from project.backend.Step3.main_agent import VibeSearchAgent          
+from project.backend.Step1.utils import analyze_description_with_gemini
 
 app = FastAPI()
 load_dotenv()
@@ -191,16 +192,23 @@ async def extract_and_save_url(request: UrlAnalyzeRequest):
         if not data:
             raise HTTPException(status_code=400, detail="웹페이지 정보를 가져올 수 없습니다.")
         
+        description = data.get("description", "No description available")
+        ai_parsed_data = await analyze_description_with_gemini(description)
+        brand_info = data.get("brand", "")
+        final_key_details = ai_parsed_data.get("key_details", "")
+        if brand_info:
+            final_key_details = f"[{brand_info}] {final_key_details}".strip()
+
         extracted_items = [{
             "category": "PRODUCT", 
             "title": data.get("title", "Unknown"),
-            "vibe_text": data.get("description", "No description available"), # 묘사 텍스트
+            "vibe_text": ai_parsed_data.get("vibe_text", "No description available"), 
             "image_url": data.get("image_url", ""), # BeautifulSoup으로 뜯어온 진짜 주소
             "facts": {
                 "title": data.get("title", ""),
                 "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
                 "location_text": data.get("source", ""),
-                "key_details": data.get("brand", "")
+                "key_details": final_key_details
             }
         }]
     
