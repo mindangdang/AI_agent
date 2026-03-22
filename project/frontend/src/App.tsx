@@ -836,24 +836,24 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-4 md:grid-cols-2 auto-rows-fr">
                           {tasteSections.map((section, index) => (
                             <div
                               key={`${section.title}-${index}`}
-                              className={`rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 backdrop-blur-sm`}
+                              className={`flex h-full flex-col rounded-[2rem] border bg-gradient-to-br ${section.accent} p-5 md:p-6 backdrop-blur-sm`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Taste Cue {String(index + 1).padStart(2, '0')}</p>
-                                  <h5 className="mt-2 text-xl font-black tracking-tight text-black capitalize">{section.title}</h5>
+                                  <h5 className="mt-2 text-lg md:text-xl font-black tracking-tight text-black capitalize">{section.title}</h5>
                                 </div>
-                                <Compass className="h-5 w-5 text-gray-400" />
+                                <Compass className="h-5 w-5 shrink-0 text-gray-400" />
                               </div>
-                              <div className="mt-5 space-y-3">
+                              <div className="mt-4 grid gap-2 sm:grid-cols-2">
                                 {section.body.map((line, lineIndex) => (
-                                  <div key={`${section.title}-${lineIndex}`} className="flex gap-3 rounded-2xl bg-white/80 px-4 py-3 shadow-sm shadow-black/5">
-                                    <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-black" />
-                                    <p className="text-sm font-medium leading-6 text-gray-700">{line}</p>
+                                  <div key={`${section.title}-${lineIndex}`} className="flex items-start gap-3 rounded-xl bg-white/80 px-3.5 py-2.5 shadow-sm shadow-black/5">
+                                    <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-black" />
+                                    <p className="text-sm font-medium leading-5 text-gray-700 break-words">{line}</p>
                                   </div>
                                 ))}
                               </div>
