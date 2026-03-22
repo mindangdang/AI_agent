@@ -5,8 +5,6 @@ pillow
 requests
 python-dotenv
 psycopg2-binary
-torch
-transformers
 fastmcp
 pgvector==0.2.5
 fastapi

@@ -10,8 +10,6 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
-import torch
-from transformers import CLIPProcessor, CLIPModel
 
 # ---------------------------------------------------------
 # 1. 환경변수 및 API, AI 모델 설정
@@ -29,22 +27,6 @@ client = genai.Client(
         base_url=my_proxy_url
     )
 )
-
-'''
-print(" CLIP 모델을 로드하는 중입니다... (최초 1회)")
-device = "cuda" if torch.cuda.is_available() else "cpu"
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
-def get_image_embedding(image: Image.Image) -> List[float]:
-    """PIL 이미지를 받아 512차원의 CLIP 임베딩 벡터로 변환 (정규화 포함)"""
-    inputs = clip_processor(images=image, return_tensors="pt").to(device)
-    with torch.no_grad():
-        image_features = clip_model.get_image_features(**inputs)
-    # Cosine Similarity 계산을 위해 L2 정규화 수행
-    image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
-    return image_features.cpu().numpy().tolist()[0]
-'''
 
 # ---------------------------------------------------------
 # 2. Schema에 대한 Pydantic 정의
@@ -68,7 +50,6 @@ class ExtractedItem(BaseModel):
     vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 시각적 분위기를 중점적으로 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것")
     facts: Facts
     reviews: Optional[Review] = None
-    #image_embedding: Optional[List[float]] = Field(description="CLIP 기반 512차원 이미지 임베딩 벡터", default=None)
 
 class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
@@ -131,23 +112,9 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
 
     extracted_data = response_ocr.parsed
 
-    # Step.2 & 3: Review Search 및 Image Embedding 병렬 처리
+    # Step.2: Review Search 
     for item in extracted_data.extracted_items:
         title = item.facts.title
-
-        # --- Step.3: 이미지 벡터 임베딩 ---
-        '''
-        try:
-            # LLM이 매핑해준 슬라이드 인덱스를 바탕으로 원본 이미지 선택
-            target_image = images[item.image_index]
-            print(f" '{title}'의 시각적 바이브(Slide {item.image_index})를 임베딩합니다...")
-            item.image_embedding = get_image_embedding(target_image)
-        except Exception as e:
-            print(f" '{title}' 이미지 임베딩 실패: {e}")
-            # 매핑에 실패한 경우 안전하게 첫 번째 이미지를 기본값으로 사용
-            pass
-        '''
-        # -------------------------------------------
 
         if not title:
             item.reviews = None 
