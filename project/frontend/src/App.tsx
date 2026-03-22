@@ -840,15 +840,15 @@ export default function App() {
                           {tasteSections.map((section, index) => (
                             <div
                               key={`${section.title}-${index}`}
-                              className={`flex h-full flex-col rounded-[2rem] border bg-gradient-to-br ${section.accent} p-5 md:p-6 backdrop-blur-sm`}
+                              className={`flex h-full flex-col rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 md:p-8 backdrop-blur-sm`}
                             >
                               {/* 1. 상단 타이틀 영역 */}
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+                                  <p className="text-xs font-black uppercase tracking-[0.3em] text-gray-500">
                                     Taste Cue {String(index + 1).padStart(2, '0')}
                                   </p>
-                                  <h5 className="mt-2 text-lg md:text-xl font-black tracking-tight text-black capitalize">
+                                  <h5 className="mt-3 text-xl md:text-2xl font-black tracking-tight text-black capitalize">
                                     {section.title}
                                   </h5>
                                 </div>
@@ -856,11 +856,11 @@ export default function App() {
                               </div>
 
                               {/* 2. 하단 리스트 영역 */}
-                              <div className="mt-4 flex flex-col gap-3 rounded-2xl bg-white/80 p-5 shadow-sm shadow-black/5">
+                              <div className="mt-5 flex flex-col gap-4 rounded-3xl bg-white/80 p-6 shadow-sm shadow-black/5">
                                 {section.body.map((line, lineIndex) => (
                                   <div key={`${section.title}-${lineIndex}`} className="flex items-start gap-3">
                                     <div className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-black/60" />
-                                    <p className="text-sm font-medium leading-relaxed text-gray-700 break-keep">
+                                    <p className="text-base font-medium leading-relaxed text-gray-800 break-keep">
                                       {line}
                                     </p>
                                   </div>
