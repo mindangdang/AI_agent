@@ -17,8 +17,6 @@ client = genai.Client(
     )
 )
 
-model = genai.GenerativeModel('gemini-1.5-flash') #
-
 async def analyze_description_with_gemini(description: str) -> dict:
     if not description or description == "No description available":
         return {"vibe_text": "No description available", "key_details": ""}
@@ -40,10 +38,18 @@ async def analyze_description_with_gemini(description: str) -> dict:
     """
     
     try:
-        response = model.generate_content(prompt)
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt, 
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",  
+                temperature=0.1 
+            )
+        )
 
         clean_text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(clean_text)
+        
     except Exception as e:
         print(f"Gemini API 파싱 에러: {e}")
         # API 실패 시 원본 데이터를 적당히 쪼개서 반환하는 Fallback

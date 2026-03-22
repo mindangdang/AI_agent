@@ -985,17 +985,34 @@ export default function App() {
                 />
               </div>
               <div className="md:w-1/2 p-8 md:p-10 flex flex-col bg-white">
-                <div className="flex items-center justify-between mb-8">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white bg-black px-3 py-1.5 rounded-lg">
-                    {selectedItem.category}
-                  </span>
-                  <button 
-                    onClick={() => setSelectedItem(null)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
+                {(() => {
+                  const facts = typeof selectedItem.facts === 'string' ? (() => {
+                    try { return JSON.parse(selectedItem.facts); } catch { return null; }
+                  })() : selectedItem.facts;
+                  
+                  const title = facts?.title || facts?.Title;
+
+                  return (
+                    <div className="flex items-start justify-between mb-8 gap-4 border-b border-gray-100 pb-6 shrink-0">
+                      <div className="space-y-3">
+                        <span className="inline-block text-[10px] font-black uppercase tracking-widest text-white bg-black px-3 py-1.5 rounded-lg">
+                          {selectedItem.category}
+                        </span>
+                        {title && (
+                          <h2 className="text-2xl md:text-3xl font-black text-black tracking-tight leading-tight break-keep">
+                            {title}
+                          </h2>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => setSelectedItem(null)}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+                  );
+                })()}
                 
                 <div className="flex-1 overflow-y-auto space-y-8 pr-4 custom-scrollbar">
                   <section>
@@ -1012,17 +1029,15 @@ export default function App() {
                         const facts = (() => {
                           if (!selectedItem.facts) return null;
                           if (typeof selectedItem.facts === 'string') {
-                            try {
-                              return JSON.parse(selectedItem.facts);
-                            } catch {
-                              return null;
-                            }
+                            try { return JSON.parse(selectedItem.facts); } catch { return null; }
                           }
                           return selectedItem.facts;
                         })();
 
                         return facts && typeof facts === 'object' ? (
-                          Object.entries(facts).map(([key, value]) => (
+                          Object.entries(facts)
+                            .filter(([key]) => key.toLowerCase() !== 'title')
+                            .map(([key, value]) => (
                             <div key={key} className="group/fact bg-gray-50 p-4 rounded-2xl border border-gray-100">
                               <dt className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
                                 {key.replace(/_/g, ' ')}
