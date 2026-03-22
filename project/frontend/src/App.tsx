@@ -849,11 +849,11 @@ export default function App() {
                                 </div>
                                 <Compass className="h-5 w-5 shrink-0 text-gray-400" />
                               </div>
-                              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                              <div className="mt-4 flex flex-col gap-2.5">
                                 {section.body.map((line, lineIndex) => (
-                                  <div key={`${section.title}-${lineIndex}`} className="flex items-start gap-3 rounded-xl bg-white/80 px-3.5 py-2.5 shadow-sm shadow-black/5">
-                                    <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-black" />
-                                    <p className="text-sm font-medium leading-5 text-gray-700 break-words">{line}</p>
+                                  <div key={`${section.title}-${lineIndex}`} className="flex items-start gap-3 rounded-xl bg-white/80 px-3.5 py-3 shadow-sm shadow-black/5">
+                                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-black/60" />
+                                    <p className="text-sm font-medium leading-relaxed text-gray-700 break-keep">{line}</p>
                                   </div>
                                 ))}
                               </div>
