@@ -220,25 +220,6 @@ async def extract_and_save_url(request: UrlAnalyzeRequest):
         print(f"DB 저장 중 에러 발생: {e}")
         return {"success": True, "message": "DB 저장 중 오류가 있었으나 데이터는 추출됨", "data": extracted_items}
 
-    # 취향 프로필 업데이트 (아이템 추가 시)
-    try:
-        summary = analyze_vibe(user_id=1)  
-        if summary:
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
-                (summary,)
-            )
-            conn.commit()
-            cursor.close()
-            conn.close()
-            print("취향 프로필 업데이트 완료")
-        else:
-            print("취향 프로필 생성 실패: 데이터 부족")
-    except Exception as e:
-        print(f"취향 프로필 업데이트 실패: {e}")
-
     return {"success": True, "message": f"총 {len(extracted_items)}개 추출 완료", "data": extracted_items}
 
 # [API 2] 취향 프로필 자동 생성
@@ -346,19 +327,7 @@ def save_manual_item(request: ManualItemCreate):
         )
         conn.commit()
 
-        # 수동 저장 후 취향 프로필 업데이트
-        try:
-            summary = analyze_vibe(user_id=int(request.user_id))
-            if summary:
-                cursor.execute(
-                    "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
-                    (summary,)
-                )
-                conn.commit()
-        except Exception as e:
-            print(f"취향 프로필 업데이트 실패: {e}")
-
-        return {"success": True, "message": "에이전트 검색 결과가 내 피드에 박제되었습니다."}
+        return {"success": True, "message": "에이전트 검색 결과가 내 피드로 이동 되었습니다."}
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {str(e)}")
