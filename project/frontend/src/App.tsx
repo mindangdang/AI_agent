@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
@@ -7,13 +7,10 @@ import {
   User, 
   Sparkles, 
   Trash2, 
-  ExternalLink, 
   Loader2,
   Instagram,
   Compass,
   Heart,
-  MessageSquare,
-  LogOut,
   X,
   ThumbsUp,
   ThumbsDown,
@@ -40,7 +37,6 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-
 type TasteProfileSection = {
   title: string;
   body: string[];
@@ -53,6 +49,9 @@ const tasteSectionAccents = [
   'from-yellow-400/20 via-orange-400/10 to-transparent border-yellow-200/70',
   'from-emerald-500/15 via-teal-500/10 to-transparent border-emerald-200/70',
 ];
+
+// 변하지 않는 상수 배열은 컴포넌트 밖으로 분리하여 불필요한 재생성 방지
+const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
 
 function normalizeTasteValue(value: unknown): string[] {
   if (value == null) return [];
@@ -135,6 +134,19 @@ async function copyTextToClipboard(text: string) {
   document.body.removeChild(textarea);
 }
 
+// facts 데이터를 안전하게 파싱하는 유틸리티 함수 (중복 제거용)
+function parseItemFacts(facts: unknown): Record<string, any> | null {
+  if (!facts) return null;
+  if (typeof facts === 'string') {
+    try {
+      return JSON.parse(facts);
+    } catch {
+      return null;
+    }
+  }
+  return facts as Record<string, any>;
+}
+
 export default function App() {
   const [user] = useState<{ id: number; username: string }>({ id: 1, username: 'guest' });
   const [items, setItems] = useState<SavedItem[]>([]);
@@ -146,7 +158,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<string | null>(null);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
-  const [isSavingSearch, setIsSavingSearch] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'like' | 'dislike' | null>(null);
   const [feedbackReason, setFeedbackReason] = useState("");
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
@@ -155,8 +166,15 @@ export default function App() {
   const [isSharingProfile, setIsSharingProfile] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All'); 
 
-  const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
-  const tasteSections = buildTasteProfileSections(taste);
+  // 성능 최적화: 의존성 값이 바뀔 때만 재계산하도록 useMemo 적용
+  const tasteSections = useMemo(() => buildTasteProfileSections(taste), [taste]);
+  const categories = useMemo(() => ['All', ...Array.from(new Set(items.map(item => item.category))).filter(Boolean)], [items]);
+  const filteredItems = useMemo(() => selectedCategory === 'All' ? items : items.filter(item => item.category === selectedCategory), [items, selectedCategory]);
+
+  // 모달 내부 최적화: selectedItem이 바뀔 때 한 번만 파싱
+  const parsedModalFacts = useMemo(() => parseItemFacts(selectedItem?.facts), [selectedItem]);
+  const modalTitle = parsedModalFacts?.title || parsedModalFacts?.Title;
+  const modalReviewData = selectedItem?.reviews || parsedModalFacts;
 
   useEffect(() => {
     if (user) {
@@ -173,12 +191,6 @@ export default function App() {
       setQuotaCountdown(null);
     }
   }, [quotaCountdown]);
-
-  const categories = ['All', ...Array.from(new Set(items.map(item => item.category))).filter(Boolean)];
-  
-  const filteredItems = selectedCategory === 'All' 
-    ? items 
-    : items.filter(item => item.category === selectedCategory);
 
   const fetchItems = async () => {
     if (!user) return;
@@ -280,7 +292,6 @@ export default function App() {
         throw new Error(error.detail || "Failed to analyze URL");
       }
       
-      // Optimistic UI: 응답 데이터 즉시 state에 추가 (새로고침 없음)
       const responseData = await res.json();
       if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
         const newItems = responseData.data.map((item: any, index: number) => ({
@@ -299,6 +310,7 @@ export default function App() {
       
       setNewUrl("");
       await fetchTaste();
+      await fetchItems(); // 버그 픽스: 서버 ID 동기화를 위해 다시 Fetch
     } catch (error: any) {
       console.error(error);
       alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
@@ -313,7 +325,6 @@ export default function App() {
     const shouldDelete = window.confirm('정말로 삭제하십니까?');
     if (!shouldDelete) return;
 
-    // Optimistic UI: 먼저 UI에서 제거 (즉각 업데이트)
     const previousItems = items;
     setItems(items.filter(item => item.id !== id));
     
@@ -389,7 +400,6 @@ export default function App() {
 
   const handleSaveSearchResult = async (silent = false) => {
     if (!searchResults || !user) return;
-    setIsSavingSearch(true);
     try {
       const res = await fetch('/api/items/manual', {
         method: 'POST',
@@ -405,7 +415,6 @@ export default function App() {
       
       if (!res.ok) throw new Error("Failed to save result");
       
-      // Optimistic UI: 새로고침 없이 state 즉시 업데이트
       const newItem: SavedItem = {
         id: Date.now(),
         url: "agentic-search",
@@ -421,11 +430,10 @@ export default function App() {
       
       if (!silent) alert("Saved to your feed!");
       await fetchTaste();
+      await fetchItems(); // 버그 픽스: 동기화 누락 방지
     } catch (error: any) {
       console.error(error);
       if (!silent) alert(error.message);
-    } finally {
-      setIsSavingSearch(false);
     }
   };
 
@@ -512,7 +520,7 @@ export default function App() {
                   <div className="w-full sm:w-48 space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Session ID</label>
                     <input
-                      type="password"
+                      type="text" // 버그 수정: password 타입 제거하여 자동완성 방지
                       placeholder="sessionid"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
@@ -529,7 +537,6 @@ export default function App() {
                 </form>
               </header>
 
-              {/* 카테고리 필터 버튼 영역 */}
               {items.length > 0 && (
                 <div className="flex flex-wrap gap-2 py-2">
                   {categories.map(cat => (
@@ -552,10 +559,7 @@ export default function App() {
               {/* Pinterest-like Grid */}
               <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
                 {Array.isArray(filteredItems) && filteredItems.map((item) => {
-                  // 1. facts 파싱 및 타이틀 추출
-                  const facts = typeof item.facts === 'string' ? (() => {
-                    try { return JSON.parse(item.facts); } catch { return null; }
-                  })() : item.facts;
+                  const facts = parseItemFacts(item.facts);
                   const title = facts?.title || facts?.Title;
 
                   return (
@@ -593,7 +597,6 @@ export default function App() {
                         </button>
                       </div>
                       
-
                       <div>
                         <h3 className="text-base font-black leading-tight line-clamp-2 text-black">
                           {title || item.vibe}
@@ -860,7 +863,6 @@ export default function App() {
                               key={`${section.title}-${index}`}
                               className={`flex h-full flex-col rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 md:p-8 backdrop-blur-sm`}
                             >
-                              {/* 1. 상단 타이틀 영역 */}
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-xs font-black uppercase tracking-[0.3em] text-gray-500">
@@ -872,8 +874,6 @@ export default function App() {
                                 </div>
                                 <Compass className="h-5 w-5 shrink-0 text-gray-400" />
                               </div>
-
-                              {/* 2. 하단 리스트 영역 */}
                               <div className="mt-5 flex flex-col gap-4 rounded-3xl bg-white/80 p-6 shadow-sm shadow-black/5">
                                 {section.body.map((line, lineIndex) => (
                                   <div key={`${section.title}-${lineIndex}`} className="flex items-start gap-3">
@@ -995,7 +995,6 @@ export default function App() {
             >
               <div className="md:w-1/2 bg-gray-50 flex items-center justify-center overflow-hidden p-8">
                 <img 
-                  // http로 시작하면 그대로 쓰고, 아니면 /api/images/를 붙이도록 분기 처리
                   src={
                     selectedItem.image_url?.startsWith('http') 
                       ? selectedItem.image_url 
@@ -1012,34 +1011,24 @@ export default function App() {
                 />
               </div>
               <div className="md:w-1/2 p-8 md:p-10 flex flex-col bg-white">
-                {(() => {
-                  const facts = typeof selectedItem.facts === 'string' ? (() => {
-                    try { return JSON.parse(selectedItem.facts); } catch { return null; }
-                  })() : selectedItem.facts;
-                  
-                  const title = facts?.title || facts?.Title;
-
-                  return (
-                    <div className="flex items-start justify-between mb-8 gap-4 border-b border-gray-100 pb-6 shrink-0">
-                      <div className="space-y-3">
-                        <span className="inline-block text-[10px] font-black uppercase tracking-widest text-white bg-black px-3 py-1.5 rounded-lg">
-                          {selectedItem.category}
-                        </span>
-                        {title && (
-                          <h2 className="text-2xl md:text-3xl font-black text-black tracking-tight leading-tight break-keep">
-                            {title}
-                          </h2>
-                        )}
-                      </div>
-                      <button 
-                        onClick={() => setSelectedItem(null)}
-                        className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
-                      >
-                        <X className="w-6 h-6" />
-                      </button>
-                    </div>
-                  );
-                })()}
+                <div className="flex items-start justify-between mb-8 gap-4 border-b border-gray-100 pb-6 shrink-0">
+                  <div className="space-y-3">
+                    <span className="inline-block text-[10px] font-black uppercase tracking-widest text-white bg-black px-3 py-1.5 rounded-lg">
+                      {selectedItem.category}
+                    </span>
+                    {modalTitle && (
+                      <h2 className="text-2xl md:text-3xl font-black text-black tracking-tight leading-tight break-keep">
+                        {modalTitle}
+                      </h2>
+                    )}
+                  </div>
+                  <button 
+                    onClick={() => setSelectedItem(null)}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
                 
                 <div className="flex-1 overflow-y-auto space-y-8 pr-4 custom-scrollbar">
                   <section>
@@ -1052,75 +1041,54 @@ export default function App() {
                   <section>
                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Extracted Information</h3>
                     <div className="grid grid-cols-1 gap-4">
-                      {(() => {
-                        const facts = (() => {
-                          if (!selectedItem.facts) return null;
-                          if (typeof selectedItem.facts === 'string') {
-                            try { return JSON.parse(selectedItem.facts); } catch { return null; }
-                          }
-                          return selectedItem.facts;
-                        })();
-
-                        return facts && typeof facts === 'object' ? (
-                          Object.entries(facts)
-                            .filter(([key]) => key.toLowerCase() !== 'title')
-                            .map(([key, value]) => (
-                            <div key={key} className="group/fact bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                              <dt className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                                {key.replace(/_/g, ' ')}
-                              </dt>
-                              <dd className="text-sm font-medium text-black">
-                                {Array.isArray(value) ? (
-                                  <div className="flex flex-wrap gap-2">
-                                    {value.map((val, i) => (
-                                      <span key={i} className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold shadow-sm">
-                                        {String(val)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <span>{String(value)}</span>
-                                )}
-                              </dd>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-gray-400 font-medium">No detailed facts available.</p>
-                        );
-                      })()}
+                      {parsedModalFacts ? (
+                        Object.entries(parsedModalFacts)
+                          .filter(([key]) => key.toLowerCase() !== 'title')
+                          .map(([key, value]) => (
+                          <div key={key} className="group/fact bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <dt className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                              {key.replace(/_/g, ' ')}
+                            </dt>
+                            <dd className="text-sm font-medium text-black">
+                              {Array.isArray(value) ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {value.map((val, i) => (
+                                    <span key={i} className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold shadow-sm">
+                                      {String(val)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span>{String(value)}</span>
+                              )}
+                            </dd>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-400 font-medium">No detailed facts available.</p>
+                      )}
                     </div>
                   </section>
 
                   <section className="border-t border-gray-100 pt-8">
                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Review Insights</h3>
-                    {(() => {
-                      const facts = typeof selectedItem.facts === 'string' ? (() => {
-                        try {
-                          return JSON.parse(selectedItem.facts);
-                        } catch {
-                          return null;
-                        }
-                      })() : selectedItem.facts;
-                      const reviewData = selectedItem.reviews || facts;
-
-                      return (reviewData?.star_review || reviewData?.core_summary || reviewData?.review) ? (
-                        <div className="bg-gradient-to-tr from-yellow-50 to-orange-50 p-6 rounded-3xl border border-yellow-100/50">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-sm font-black text-yellow-600 uppercase tracking-tight">
-                              {reviewData.star_review || "Recommended"}
-                            </span>
-                            <div className="flex text-yellow-400">
-                              {"★".repeat(Math.min(5, Math.floor(parseFloat(reviewData.star_review) || 5)))}
-                            </div>
+                    {modalReviewData?.star_review || modalReviewData?.core_summary || modalReviewData?.review ? (
+                      <div className="bg-gradient-to-tr from-yellow-50 to-orange-50 p-6 rounded-3xl border border-yellow-100/50">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-sm font-black text-yellow-600 uppercase tracking-tight">
+                            {modalReviewData.star_review || "Recommended"}
+                          </span>
+                          <div className="flex text-yellow-400">
+                            {"★".repeat(Math.min(5, Math.floor(parseFloat(modalReviewData.star_review) || 5)))}
                           </div>
-                          <p className="text-sm font-bold leading-relaxed text-gray-800 tracking-tight">
-                            "{reviewData.core_summary || reviewData.review || "No summary available"}"
-                          </p>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-400 font-medium">No review data extracted for this item.</p>
-                      );
-                    })()}
+                        <p className="text-sm font-bold leading-relaxed text-gray-800 tracking-tight">
+                          "{modalReviewData.core_summary || modalReviewData.review || "No summary available"}"
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 font-medium">No review data extracted for this item.</p>
+                    )}
                   </section>
 
                   {selectedItem.url && (
