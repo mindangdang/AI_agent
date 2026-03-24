@@ -4,10 +4,11 @@ google-genai
 pillow
 requests
 python-dotenv
-psycopg2-binary
+psycopg[pool,binary]
 fastmcp
 pgvector==0.2.5
 fastapi
 openai
 beautifulsoup4
 httpx 
+uvicorn[standard]

@@ -1,18 +1,20 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+import os
+import json
+import uuid
+import asyncio
+from datetime import datetime
+from typing import List, Optional
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import List, Optional
-import os
-import json
-from dotenv import load_dotenv
 from fastapi.encoders import jsonable_encoder
-import uuid
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from datetime import datetime
-from playwright.sync_api import sync_playwright
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from psycopg_pool import AsyncConnectionPool
+from psycopg.rows import dict_row  
+from playwright.async_api import async_playwright
 from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.shopping_crawler import scrape_product_metadata
 from project.backend.Step1.instagram_crawler import download_images, crawl_instagram_post
@@ -22,82 +24,106 @@ from project.backend.Step2.preferance_llm import analyze_vibe
 from project.backend.Step3.main_agent import VibeSearchAgent          
 from project.backend.Step1.utils import analyze_description_with_gemini
 
-app = FastAPI()
 load_dotenv()
+NEON_DB_URL = os.environ.get("NEON_DB_URL")
 
-# insta_vibes 폴더를 생성하고 정적 파일을 /api/images/...로 서빙합니다.
+# ==========================================
+# 1. 전역 DB 커넥션 풀 관리 & 초기화
+# ==========================================
+pool: AsyncConnectionPool = None
+
+async def init_db(db_pool: AsyncConnectionPool):
+    """비동기 방식으로 DB 테이블 스키마를 초기화"""
+    try:
+        async with db_pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("""
+                  CREATE TABLE IF NOT EXISTS saved_posts (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT,
+                    source_url TEXT,
+                    title TEXT,
+                    category TEXT,
+                    summary_text TEXT,
+                    image_url TEXT,
+                    vibe_text TEXT,
+                    vibe_vector vector(768),
+                    facts JSONB,
+                    reviews JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_url, title)
+                  );
+                """)
+                
+                await cursor.execute("""
+                  ALTER TABLE saved_posts
+                  ADD COLUMN IF NOT EXISTS image_url TEXT;
+                """)
+                
+                await cursor.execute("""
+                  ALTER TABLE saved_posts
+                  ADD COLUMN IF NOT EXISTS reviews JSONB;
+                """)
+                
+                await cursor.execute("""
+                  CREATE TABLE IF NOT EXISTS taste_profile (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    summary TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT one_row CHECK (id = 1)
+                  );
+                """)
+                await conn.commit()
+        print("DB 테이블 초기화 완료")
+    except Exception as e:
+        print(f"DB 초기화 중 경고: {e}")
+
+# FastAPI 라이프사이클
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global pool
+    if not NEON_DB_URL:
+        raise RuntimeError("NEON_DB_URL environment variable is not set.")
+    
+    # 트래픽에 맞춰 최소 5개 ~ 최대 20개의 연결을 유지하는 풀 생성
+    pool = AsyncConnectionPool(conninfo=NEON_DB_URL, min_size=5, max_size=20)
+    print("DB 커넥션 풀 생성 완료")
+    
+    # 풀이 생성되면 테이블 스키마 확인
+    await init_db(pool)
+    
+    yield  # === 여기서 FastAPI 앱 동작 ===
+    
+    await pool.close()
+    print("DB 커넥션 풀 안전하게 종료됨")
+
+app = FastAPI(lifespan=lifespan)
+
+# ==========================================
+# 2. 앱 설정 및 미들웨어
+# ==========================================
 if not os.path.exists("insta_vibes"):
     os.makedirs("insta_vibes")
 app.mount("/api/images", StaticFiles(directory="insta_vibes"), name="images")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], #  배포 시 실제 도메인으로 변경 필수!
     allow_credentials=True, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-NEON_DB_URL = os.environ.get("NEON_DB_URL")
+# 의존성(Dependency) 주입 함수
+async def get_db_connection():
+    if pool is None:
+        raise HTTPException(status_code=500, detail="Database pool is not initialized")
+    async with pool.connection() as conn:
+        yield conn
 
-def get_db():
-    if not NEON_DB_URL:
-        raise HTTPException(status_code=500, detail="NEON_DB_URL environment variable is not set.")
-    conn = psycopg2.connect(NEON_DB_URL)
-    return conn
-
-def init_db():
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-      CREATE TABLE IF NOT EXISTS saved_posts (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT,
-        source_url TEXT,
-        title TEXT,
-        category TEXT,
-        summary_text TEXT,
-        image_url TEXT,
-        vibe_text TEXT,
-        vibe_vector vector(768),
-        facts JSONB,
-        reviews JSONB,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(source_url, title)
-      );
-    """)
-
-    # 기존 테이블에 image_url 컬럼이 없을 경우 추가
-    cursor.execute("""
-      ALTER TABLE saved_posts
-      ADD COLUMN IF NOT EXISTS image_url TEXT;
-    """)
-
-    # 기존 테이블에 reviews 컬럼이 없을 경우 추가
-    cursor.execute("""
-      ALTER TABLE saved_posts
-      ADD COLUMN IF NOT EXISTS reviews JSONB;
-    """)
-    
-    cursor.execute("""
-      CREATE TABLE IF NOT EXISTS taste_profile (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        summary TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT one_row CHECK (id = 1)
-      );
-    """)
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-try:
-    init_db()
-except Exception as e:
-    print(f"DB 초기화 중 경고: {e}")
-
+# ==========================================
+# 3. Pydantic Models 
+# ==========================================
 class UrlAnalyzeRequest(BaseModel):
     url: str
     session_id: Optional[str] = None
@@ -123,274 +149,278 @@ class ManualItemCreate(BaseModel):
     url: str
     image_url: Optional[str] = ""
 
+# ==========================================
+# 4. [백그라운드 워커] 무거운 크롤링 전담
+# ==========================================
+async def background_crawl_and_save(post_url: str, session_id: Optional[str], rapid_api_key: Optional[str]):
+    print(f"[백그라운드] 작업 시작: {post_url}")
+    try:
+        crawl_result = None
+        is_instagram = "instagram.com" in post_url.lower()
+        
+        # case1: 인스타 게시물인 경우
+        if is_instagram:
+            if rapid_api_key:
+                # 동기 함수인 Rapid_crawler를 스레드풀로 넘겨 비동기 서버 멈춤 방지
+                crawl_result = await asyncio.to_thread(Rapid_crawler, post_url) 
+            else:
+                async with async_playwright() as p:
+                    browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+                    context = await browser.new_context(user_agent="Mozilla/5.0...")
+                    await context.add_cookies([{"name": "sessionid", "value": session_id, "domain": ".instagram.com", "path": "/", "httpOnly": True, "secure": True}])
+                    page = await context.new_page()
+                    # Playwright 내부 로직이 동기적이므로 thread에 던짐.
+                    crawl_result = await asyncio.to_thread(crawl_instagram_post, page, post_url) 
+                    await browser.close()
 
-# [API 1] 크롤링 & 데이터 추출
+            if not crawl_result or crawl_result.get("error"):
+                print(f"[백그라운드] 크롤링 실패: {crawl_result.get('error')}")
+                return
+
+            raw_downloaded_files = await asyncio.to_thread(download_images, crawl_result.get("image_urls", []), "insta_vibes")
+            downloaded_files = []
+            
+            for old_path in raw_downloaded_files:
+                if os.path.exists(old_path):
+                    ext = os.path.splitext(old_path)[1] or '.jpg'
+                    new_filename = f"{uuid.uuid4().hex}{ext}"
+                    new_path = os.path.join("insta_vibes", new_filename)
+                    os.rename(old_path, new_path)
+                    downloaded_files.append(new_path)
+                    
+            try:
+                ai_result = await asyncio.to_thread(
+                    extract_fact_and_vibe,
+                    downloaded_files, 
+                    crawl_result.get("caption", ""),  
+                    crawl_result.get("hashtags", []) 
+                )
+                extracted_items = ai_result.get("extracted_items", [])
+                
+                for item in extracted_items:
+                    image_index = int(item.get("image_index", 0) or 0)
+                    image_path = downloaded_files[image_index] if image_index < len(downloaded_files) else None
+                    item["image_url"] = os.path.basename(image_path) if image_path else ""
+                    
+            except Exception as e:
+                print(f"[백그라운드] AI 분석 중 에러 발생: {e}")
+                return
+
+        # case2: 인스타 게시물이 아닌 경우
+        else:
+            data = await scrape_product_metadata(post_url) 
+            if not data:
+                print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
+                return
+            
+            description = data.get("description", "No description available")
+            ai_parsed_data = await analyze_description_with_gemini(description)
+            brand_info = data.get("brand", "")
+            final_key_details = ai_parsed_data.get("key_details", "")
+            if brand_info:
+                final_key_details = f"[{brand_info}] {final_key_details}".strip()
+
+            extracted_items = [{
+                "category": "PRODUCT", 
+                "title": data.get("title", "Unknown"),
+                "vibe_text": ai_parsed_data.get("vibe_text", "No description available"), 
+                "image_url": data.get("image_url", ""), 
+                "facts": {
+                    "title": data.get("title", ""),
+                    "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
+                    "location_text": data.get("source", ""),
+                    "key_details": final_key_details
+                }
+            }]
+        
+        # DB 저장 
+        user_id = "1" 
+        await asyncio.to_thread(insert_items_to_db, user_id, post_url, extracted_items)
+        print(f"[백그라운드] 작업 및 DB 저장 완료: 총 {len(extracted_items)}개")
+
+    except Exception as e:
+        print(f"[백그라운드] 전체 프로세스 에러: {str(e)}")
+
+
+# ==========================================
+# 5. API 라우터 (Endpoints)
+# ==========================================
+
+# [API 1] 크롤링 & 데이터 추출 (즉시 응답)
 @app.post("/api/extract-url")
-async def extract_and_save_url(request: UrlAnalyzeRequest):
+async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: BackgroundTasks):
     post_url = request.url
     session_id = request.session_id
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
     
-    crawl_result = None
-    is_instagram = "instagram.com" in post_url.lower()
-    # case1:인스타 게시물인 경우
-    if is_instagram:
-        if rapid_api_key:
-            crawl_result = Rapid_crawler(post_url)
-        else:
-            if not session_id:
-                raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
-            try:
-                with sync_playwright() as p:
-                    browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                    context = browser.new_context(user_agent="Mozilla/5.0...")
-                    context.add_cookies([{"name": "sessionid", "value": session_id, "domain": ".instagram.com", "path": "/", "httpOnly": True, "secure": True}])
-                    page = context.new_page()
-                    crawl_result = crawl_instagram_post(page, post_url)
-                    browser.close()
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Playwright 에러: {str(e)}")
+    if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
+        raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
 
-        if not crawl_result or crawl_result.get("error"):
-            raise HTTPException(status_code=400, detail=f"크롤링 실패: {crawl_result.get('error')}")
-
-        raw_downloaded_files = download_images(crawl_result.get("image_urls", []), save_dir="insta_vibes")
-        downloaded_files = []
-        
-        # 다운로드된 파일들에 절대 겹치지 않는 랜덤 이름(UUID) 부여
-        for old_path in raw_downloaded_files:
-            if os.path.exists(old_path):
-                ext = os.path.splitext(old_path)[1] or '.jpg'
-                new_filename = f"{uuid.uuid4().hex}{ext}"
-                new_path = os.path.join("insta_vibes", new_filename)
-                os.rename(old_path, new_path)
-                downloaded_files.append(new_path)
-        try:
-            ai_result = extract_fact_and_vibe(
-                image_paths=downloaded_files, 
-                caption=crawl_result.get("caption", ""),  
-                hashtags=crawl_result.get("hashtags", []) 
-            )
-        except Exception as e:
-            print(f"AI 분석 중 에러 발생: {e}")
-            return {"success": False, "message": "일부 아이템 분석 실패", "data": []}
-
-        extracted_items = ai_result.get("extracted_items", [])
-
-        # 이미지 파일명(또는 경로)을 각 추출 항목에 주입하여 프론트에서 /api/images/ 경로로 접근할 수 있도록 합니다.
-        for item in extracted_items:
-            try:
-                image_index = int(item.get("image_index", 0) or 0)
-                image_path = downloaded_files[image_index] if image_index < len(downloaded_files) else None
-                item["image_url"] = os.path.basename(image_path) if image_path else ""
-            except Exception:
-                item["image_url"] = ""
+    # 백그라운드 큐에 할당
+    background_tasks.add_task(background_crawl_and_save, post_url, session_id, rapid_api_key)
     
-    # case2:인스타 게시물이 아닌 경우
-    else:
-        data = await scrape_product_metadata(request.url)
-        if not data:
-            raise HTTPException(status_code=400, detail="웹페이지 정보를 가져올 수 없습니다.")
-        
-        description = data.get("description", "No description available")
-        ai_parsed_data = await analyze_description_with_gemini(description)
-        brand_info = data.get("brand", "")
-        final_key_details = ai_parsed_data.get("key_details", "")
-        if brand_info:
-            final_key_details = f"[{brand_info}] {final_key_details}".strip()
-
-        extracted_items = [{
-            "category": "PRODUCT", 
-            "title": data.get("title", "Unknown"),
-            "vibe_text": ai_parsed_data.get("vibe_text", "No description available"), 
-            "image_url": data.get("image_url", ""), # BeautifulSoup으로 뜯어온 진짜 주소
-            "facts": {
-                "title": data.get("title", ""),
-                "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
-                "location_text": data.get("source", ""),
-                "key_details": final_key_details
-            }
-        }]
-    
-    # DB 저장 (각 아이템에 user_id를 "1"로 주입하여 저장)
-    try:
-        user_id = "1" 
-        insert_items_to_db(user_id, post_url, extracted_items)
-    except Exception as e:
-        print(f"DB 저장 중 에러 발생: {e}")
-        return {"success": True, "message": "DB 저장 중 오류가 있었으나 데이터는 추출됨", "data": extracted_items}
-
-    return {"success": True, "message": f"총 {len(extracted_items)}개 추출 완료", "data": extracted_items}
+    return {
+        "success": True, 
+        "message": "데이터 추출 및 AI 분석이 시작되었습니다. 잠시 후 피드에 반영됩니다.", 
+        "status": "processing"
+    }
 
 # [API 2] 취향 프로필 자동 생성
 @app.post("/api/generate-taste")
-def generate_taste_profile():
+async def generate_taste_profile(conn = Depends(get_db_connection)):
     try:
-        # 피드에 아이템이 있는지 확인
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
-        count = cursor.fetchone()[0]
-        cursor.close()
-        conn.close()
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
+            row = await cursor.fetchone()
+            count = row[0] if row else 0
 
-        if count == 0:
-            return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
-        summary = analyze_vibe(user_id=1)  
-        if not summary:
-            return {"success": False, "message": "취향 분석에 실패했습니다."}
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
-            (summary,)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
+            if count == 0:
+                return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
+            
+            summary = await asyncio.to_thread(analyze_vibe, user_id=1)  
+            if not summary:
+                return {"success": False, "message": "취향 분석에 실패했습니다."}
+            
+            await cursor.execute(
+                "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
+                (summary,)
+            )
+            await conn.commit()
+            
         return {"success": True, "summary": summary}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"취향 분석 실패: {str(e)}")
 
 # [API 3] 에이전틱 큐레이션 검색
 @app.post("/api/agent-search")
-def run_agentic_search(request: SearchRequest):
+async def run_agentic_search(request: SearchRequest):
     try:
         agent = VibeSearchAgent(user_id=1)
-        final_answer = agent.run(request.query)
+        # LLM 호출도 스레드로 분리하여 서버 응답 지연 방지
+        final_answer = await asyncio.to_thread(agent.run, request.query)
         return {"success": True, "result": final_answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"에이전트 검색 실패: {str(e)}")
 
 # [API 4] 피드백 저장
 @app.post("/api/agentic-search/feedback")
-def save_agent_feedback(request: FeedbackRequest):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-      CREATE TABLE IF NOT EXISTS search_feedback (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT,
-        query TEXT,
-        result TEXT,
-        feedback_type TEXT,
-        reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    """)
+async def save_agent_feedback(request: FeedbackRequest, conn = Depends(get_db_connection)):
     try:
-        cursor.execute(
-            "INSERT INTO search_feedback (user_id, query, result, feedback_type, reason) VALUES (%s, %s, %s, %s, %s)",
-            (str(request.user_id), request.query, request.result, request.feedback_type, request.reason)
-        )
-        conn.commit()
+        async with conn.cursor() as cursor:
+            await cursor.execute("""
+              CREATE TABLE IF NOT EXISTS search_feedback (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT,
+                query TEXT,
+                result TEXT,
+                feedback_type TEXT,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+              );
+            """)
+            await cursor.execute(
+                "INSERT INTO search_feedback (user_id, query, result, feedback_type, reason) VALUES (%s, %s, %s, %s, %s)",
+                (str(request.user_id), request.query, request.result, request.feedback_type, request.reason)
+            )
+            await conn.commit()
 
-        # 피드백 저장 후 취향 프로필 업데이트
-        try:
-            summary = analyze_vibe(user_id=int(request.user_id))
-            if summary:
-                cursor.execute(
-                    "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
-                    (summary,)
-                )
-                conn.commit()
-        except Exception as e:
-            print(f"취향 프로필 업데이트 실패: {e}")
+            try:
+                summary = await asyncio.to_thread(analyze_vibe, user_id=int(request.user_id))
+                if summary:
+                    await cursor.execute(
+                        "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
+                        (summary,)
+                    )
+                    await conn.commit()
+            except Exception as e:
+                print(f"취향 프로필 업데이트 실패: {e}")
 
         return {"success": True, "message": "Feedback saved successfully"}
     except Exception as e:
-        conn.rollback()
+        await conn.rollback()
         raise HTTPException(status_code=500, detail=f"피드백 저장 실패: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
 
 # [API 5] 수동 저장
 @app.post("/api/items/manual")
-def save_manual_item(request: ManualItemCreate):
-    conn = get_db()
-    cursor = conn.cursor()
+async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_connection)):
     try:
-        cursor.execute(
-            """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, reviews, title, image_url) 
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (
-                str(request.user_id), 
-                request.url, 
-                request.category, 
-                request.vibe, 
-                json.dumps(request.facts, ensure_ascii=False),
-                json.dumps(request.facts.get("reviews", {}), ensure_ascii=False), 
-                request.facts.get("title", "Manual Item"),
-                request.image_url or ""
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, reviews, title, image_url) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    str(request.user_id), 
+                    request.url, 
+                    request.category, 
+                    request.vibe, 
+                    json.dumps(request.facts, ensure_ascii=False),
+                    json.dumps(request.facts.get("reviews", {}), ensure_ascii=False), 
+                    request.facts.get("title", "Manual Item"),
+                    request.image_url or ""
+                )
             )
-        )
-        conn.commit()
+            await conn.commit()
 
         return {"success": True, "message": "에이전트 검색 결과가 내 피드로 이동 되었습니다."}
     except Exception as e:
-        conn.rollback()
+        await conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
 
 # ==========================================
-# 일반 CRUD 엔드포인트
+# 6. 일반 CRUD 및 SPA 서빙 엔드포인트
 # ==========================================
 @app.get("/api/items")
-def get_items(user_id: str = "1"):
-    conn = get_db()
+async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
     try:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        query = """
-            SELECT 
-                id, 
-                source_url as url, 
-                category, 
-                facts, 
-                vibe_text as vibe, 
-                image_url, 
-                summary_text, 
-                reviews,
-                created_at 
-            FROM saved_posts 
-            WHERE user_id = %s OR user_id = 'default_user'
-            ORDER BY created_at DESC
-        """
-        cursor.execute(query, (user_id,))
-        items = cursor.fetchall()
+        async with conn.cursor(row_factory=dict_row) as cursor:
+            query = """
+                SELECT 
+                    id, 
+                    source_url as url, 
+                    category, 
+                    facts, 
+                    vibe_text as vibe, 
+                    image_url, 
+                    summary_text, 
+                    reviews,
+                    created_at 
+                FROM saved_posts 
+                WHERE user_id = %s OR user_id = 'default_user'
+                ORDER BY created_at DESC
+            """
+            await cursor.execute(query, (user_id,))
+            items = await cursor.fetchall()
+            
         print(f"프론트로 보내는 아이템 수: {len(items)}")
         return jsonable_encoder(items)
     except Exception as e:
-        print(f" 조회 에러: {e}")
+        print(f"조회 에러: {e}")
         return []
-    finally:
-        conn.close()
 
 @app.delete("/api/items/{item_id}")
-def delete_item(item_id: int):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return {"success": True}
+async def delete_item(item_id: int, conn = Depends(get_db_connection)):
+    try:
+        async with conn.cursor() as cursor:
+            await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
+            await conn.commit()
+        return {"success": True}
+    except Exception as e:
+        await conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/taste")
-def get_taste():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("SELECT * FROM taste_profile WHERE id = 1")
-    row = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return row if row else {"summary": ""}
+async def get_taste(conn = Depends(get_db_connection)):
+    try:
+        async with conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute("SELECT * FROM taste_profile WHERE id = 1")
+            row = await cursor.fetchone()
+        return row if row else {"summary": ""}
+    except Exception as e:
+        print(f"취향 프로필 조회 에러: {e}")
+        return {"summary": ""}
 
 @app.get("/api/debug/dist")
 def debug_dist():
-    import os
     exists = os.path.exists("dist")
     contents = os.listdir("dist") if exists else []
     return {"exists": exists, "contents": contents, "cwd": os.getcwd()}
@@ -419,4 +449,4 @@ async def serve_spa(full_path: str):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 8000)))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

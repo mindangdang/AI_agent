@@ -54,6 +54,13 @@ class ExtractedItem(BaseModel):
 class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
 
+class ReviewResult(BaseModel):
+    title: str = Field(description="리뷰를 검색한 원본 대상의 이름")
+    star_review: str = Field(description="별점 등 평가 점수 (없으면 빈 문자열)", default="")
+    core_summary: str = Field(description="핵심 리뷰 요약 (없으면 빈 문자열)", default="")
+
+class ReviewBatchResponse(BaseModel):
+    results: List[ReviewResult]
 # ---------------------------------------------------------
 # 3. Gemini 2.5 Flash 분석 엔진 & 멀티모달 파이프라인
 # ---------------------------------------------------------
@@ -101,7 +108,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     contents = [prompt_ocr] + images + [text_input]
 
     response_ocr = client.models.generate_content(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash",
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -113,57 +120,53 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     extracted_data = response_ocr.parsed
 
     # Step.2: Review Search 
-    for item in extracted_data.extracted_items:
-        title = item.facts.title
+    items_to_review = [item for item in extracted_data.extracted_items if item.facts.title]
+    titles_to_search = [item.facts.title for item in items_to_review]
 
-        if not title:
-            item.reviews = None 
-            continue
-
-        print(f" '{title}'에 대한 실시간 리뷰를 검색합니다...")
+    if titles_to_search:
+        print(f"[Step 2] {len(titles_to_search)}개 대상의 리뷰를 한 번에 일괄 검색합니다: {titles_to_search}")
 
         prompt_review = f"""
-        너는 주어진 이름만 갖고 구글 검색을 통해 그 대상의 객관적인 평가와 유용한 리뷰 정보를 모아오는 세계 최고의 데이터 수집가야.
+        너는 주어진 이름 목록을 바탕으로 구글 검색을 통해 객관적인 평가와 유용한 리뷰 정보를 모아오는 수집가야.
         
-        [검색 대상]: {title}
+        [검색 대상 목록]: {titles_to_search}
         
         [규칙]
-        1.없는 내용은 절대 지어내지 말 것
-        2.여러 리뷰에서 공통적으로 나오는 의견을 최대한 반영할 것
-        3.개인의 악의적인 리뷰나 허위 사실 등 노이즈 배제
-        4.검색해도 안 나오면 억지로 만들지 말고 내용을 비워놔
-        
-        [출력 형식]
-        반드시 아래 JSON 형태로만 대답해. 마크다운 기호 없이 순수 JSON 텍스트만 출력해.
-        {{
-            "star_review": "4.5 (평점 예시)",
-            "core_summary": "리뷰 요약 텍스트"
-        }}
+        1. 목록에 있는 '각 대상'에 대해 모두 구글 검색을 수행해.
+        2. 없는 내용은 절대 지어내지 말고, 내용을 비워둬.
+        3. 개인의 악의적인 리뷰나 허위 사실 등 노이즈는 배제해.
+        4.무조건 실시간으로 구글검색을 해서 리뷰를 수집해와. (내장된 지식이나 과거 데이터에 의존하지 말고)
         """
 
         try:
             response_review = client.models.generate_content(
-                model='gemini-2.5-flash-lite',
+                model='gemini-2.5-flash', 
                 contents=prompt_review,
                 config=types.GenerateContentConfig(
                     tools=[{"google_search": {}}], 
+                    response_mime_type="application/json",
+                    response_schema=ReviewBatchResponse, 
                     temperature=0.1 
                 )
             )
-            raw_text = response_review.text.strip()
             
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:-3].strip()
-                
-            parsed_dict = json.loads(raw_text)
-            item.reviews = Review(**parsed_dict)
-            
+            review_batch = response_review.parsed
+            review_dict = {res.title: res for res in review_batch.results}
+
+            for item in items_to_review:
+                matched_review = review_dict.get(item.facts.title)
+                if matched_review and (matched_review.star_review or matched_review.core_summary):
+                    item.reviews = Review(
+                        star_review=matched_review.star_review,
+                        core_summary=matched_review.core_summary
+                    )
+                else:
+                    item.reviews = None
+                    
         except Exception as e:
-            print(f" '{title}' 리뷰 검색 중 에러 발생: {e}")
-            item.reviews = None 
-            
-        time.sleep(15) # Google Search API Rate Limit 방어
-
-    print(" 모든 데이터 추출, 임베딩 및 조립 완료!")
+            print(f"리뷰 일괄 검색 중 에러 발생 (파이프라인 통과 방어): {e}")
+            for item in items_to_review:
+                item.reviews = None 
+ 
+    print("모든 데이터 추출, 임베딩 및 조립 완료!")
     return extracted_data.model_dump()
-
