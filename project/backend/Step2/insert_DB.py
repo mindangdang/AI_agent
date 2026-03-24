@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 import psycopg 
-from pgvector.psycopg import register_vector 
+from pgvector.psycopg import register_vector_async
 from google import genai
 from dotenv import load_dotenv
 from google.genai import types
@@ -67,7 +67,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         # 2. psycopg3 비동기 커넥션 연결
         async with await psycopg.AsyncConnection.connect(neon_url) as conn:
             # DB 커넥션에 벡터 타입 등록
-            await register_vector(conn) 
+            await register_vector_async(conn)
             
             async with conn.cursor() as cursor:
                 insert_query = """
