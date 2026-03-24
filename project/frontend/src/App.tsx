@@ -7,7 +7,6 @@ import {
   User,
   Zap,
 } from 'lucide-react';
-
 import { FeedTabContent } from './components/FeedTabContent';
 import { ItemDetailDialog } from './components/ItemDetailDialog';
 import { NavItem } from './components/NavItem';

@@ -3,7 +3,7 @@ import { Search, Loader2, Sparkles, ThumbsUp, ThumbsDown, Send } from 'lucide-re
 import Markdown from 'react-markdown';
 import { useEffect, useState } from 'react';
 
-import type { SavedItem } from '../App';
+import type { SavedItem } from '../types/item';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;

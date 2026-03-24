@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Plus, Loader2, Trash2, Instagram, Sparkles, Zap } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 
-import type { SavedItem } from '../App';
+import type { SavedItem } from '../types/item';
 
 type FeedTabContentProps = {
   items: SavedItem[];

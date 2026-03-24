@@ -2,7 +2,84 @@ import { motion } from 'framer-motion';
 import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram } from 'lucide-react';
 import { useState } from 'react';
 
-import { buildTasteProfileSections, type SavedItem } from '../App';
+import type { SavedItem } from '../types/item';
+
+type TasteProfileSection = {
+  title: string;
+  body: string[];
+  accent: string;
+};
+
+const tasteSectionAccents = [
+  'from-purple-500/15 via-pink-500/10 to-transparent border-purple-200/70',
+  'from-blue-500/15 via-cyan-500/10 to-transparent border-blue-200/70',
+  'from-yellow-400/20 via-orange-400/10 to-transparent border-yellow-200/70',
+  'from-emerald-500/15 via-teal-500/10 to-transparent border-emerald-200/70',
+];
+
+function normalizeTasteValue(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => normalizeTasteValue(entry));
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).map(([key, nested]) => {
+      const nestedText = normalizeTasteValue(nested).join(' · ');
+      return nestedText ? `${key.replace(/_/g, ' ')}: ${nestedText}` : key.replace(/_/g, ' ');
+    });
+  }
+  return String(value)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function buildTasteProfileSections(taste: string): TasteProfileSection[] {
+  const trimmed = taste.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object') {
+      const entries = Object.entries(parsed as Record<string, unknown>)
+        .map(([key, value], index) => ({
+          title: key.replace(/_/g, ' '),
+          body: normalizeTasteValue(value),
+          accent: tasteSectionAccents[index % tasteSectionAccents.length],
+        }))
+        .filter((section) => section.body.length > 0);
+      if (entries.length > 0) return entries;
+    }
+  } catch {
+    // Fallback to markdown/text parsing below.
+  }
+
+  const markdownSections = trimmed
+    .split(/\n(?=#{1,3}\s|[-*]\s|\d+\.\s)/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, index) => {
+      const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+      const [first, ...rest] = lines;
+      const headingMatch = first?.match(/^#{1,3}\s+(.*)$/);
+      const title = headingMatch ? headingMatch[1] : `Taste Point ${index + 1}`;
+      const contentSource = headingMatch ? rest : lines;
+      const body = contentSource
+        .flatMap((line) => line.split(/(?<=\.)\s+|•\s+|^-\s+/))
+        .map((line) => line.replace(/^[-*]\s*/, '').trim())
+        .filter(Boolean);
+      return {
+        title,
+        body,
+        accent: tasteSectionAccents[index % tasteSectionAccents.length],
+      };
+    })
+    .filter((section) => section.body.length > 0);
+
+  return markdownSections.length > 0
+    ? markdownSections
+    : [{ title: 'Taste Profile', body: [trimmed], accent: tasteSectionAccents[0] }];
+}
 
 type ProfileTabContentProps = {
   items: SavedItem[];

@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Instagram, X, Zap } from 'lucide-react';
 
-import type { SavedItem } from '../App';
+import type { SavedItem } from '../types/item';
 
 type ItemDetailDialogProps = {
   item: SavedItem | null;
