@@ -22,7 +22,7 @@ export function SearchTabContent({
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
   const [loading, setLoading] = useState(false);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
-  const [searchResults, setSearchResults] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState('');
 
   useEffect(() => {
     if (!searchResults) {
@@ -46,30 +46,55 @@ export function SearchTabContent({
     event.preventDefault();
     if (!searchQuery || !user) return;
     setLoading(true);
-    setSearchResults(null);
+    setSearchResults('');
+    setFeedbackType(null);
+    setFeedbackReason("");
+    setShowFeedbackReason(false);
     try {
       const res = await fetch('/api/agent-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery })
       });
-      const data = await res.json();
+
       if (res.status === 429) {
         setQuotaCountdown(60);
+        setLoading(false);
         return;
       }
-      if (!res.ok) throw new Error(data.detail || "Search failed");
-      setSearchResults(data.result || null);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Search failed");
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+
+      if (!reader) {
+        throw new Error("스트리밍을 지원하지 않는 브라우저입니다.");
+      }
+
+      setLoading(false);
+      let accumulatedText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk;
+        setSearchResults(accumulatedText);
+      }
     } catch (error: any) {
       console.error(error);
       alert(error.message);
-    } finally {
       setLoading(false);
     }
   };
 
   const handleSaveSearchResult = async (silent = false) => {
-    if (!searchResults || !user) return;
+    if (!searchResults.trim() || !user) return;
     try {
       const res = await fetch('/api/items/manual', {
         method: 'POST',
@@ -107,7 +132,7 @@ export function SearchTabContent({
   };
 
   const handleFeedback = async (type: 'like' | 'dislike') => {
-    if (!user || !searchResults) return;
+    if (!user || !searchResults.trim()) return;
     setFeedbackType(type);
     setShowFeedbackReason(true);
 
@@ -117,7 +142,7 @@ export function SearchTabContent({
   };
 
   const submitFeedbackReason = async () => {
-    if (!user || !searchResults || !feedbackType) return;
+    if (!user || !searchResults.trim() || !feedbackType) return;
     try {
       await fetch('/api/agentic-search/feedback', {
         method: 'POST',
@@ -183,7 +208,7 @@ export function SearchTabContent({
         </motion.div>
       )}
 
-      {searchResults && (
+      {(loading || searchResults) && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -201,28 +226,30 @@ export function SearchTabContent({
             <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-2xl">
               <button
                 onClick={() => {
-                  if (!searchResults) return;
+                  if (!searchResults.trim()) return;
                   void handleFeedback('like');
                 }}
+                disabled={loading || !searchResults.trim()}
                 className={[
                   "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black tracking-widest uppercase transition-all",
                   feedbackType === 'like'
                     ? "bg-black text-white shadow-md"
-                    : "bg-transparent text-gray-500 hover:bg-white hover:shadow-sm",
+                    : "bg-transparent text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-50",
                 ].join(' ')}
               >
                 <ThumbsUp className="w-3.5 h-3.5" /> Like
               </button>
               <button
                 onClick={() => {
-                  if (!searchResults) return;
+                  if (!searchResults.trim()) return;
                   void handleFeedback('dislike');
                 }}
+                disabled={loading || !searchResults.trim()}
                 className={[
                   "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black tracking-widest uppercase transition-all",
                   feedbackType === 'dislike'
                     ? "bg-red-500 text-white shadow-md"
-                    : "bg-transparent text-gray-500 hover:bg-white hover:shadow-sm",
+                    : "bg-transparent text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-50",
                 ].join(' ')}
               >
                 <ThumbsDown className="w-3.5 h-3.5" /> Dislike
@@ -252,7 +279,7 @@ export function SearchTabContent({
                     />
                     <button
                       onClick={async () => {
-                        if (!searchResults || !feedbackType) return;
+                        if (!searchResults.trim() || !feedbackType) return;
                         await submitFeedbackReason();
                       }}
                       className="px-8 py-3 bg-black text-white rounded-2xl text-xs font-black tracking-widest uppercase hover:bg-gray-800 transition-all flex items-center justify-center gap-2 h-[48px] sm:h-auto"
@@ -266,7 +293,11 @@ export function SearchTabContent({
           </AnimatePresence>
 
           <div className="markdown-body prose-headings:font-black prose-headings:tracking-tighter prose-a:text-blue-600 prose-a:font-bold">
-            <Markdown>{searchResults}</Markdown>
+            {searchResults ? (
+              <Markdown>{searchResults}</Markdown>
+            ) : (
+              <p className="text-sm font-medium text-gray-400 animate-pulse">Searching and streaming results...</p>
+            )}
           </div>
         </motion.div>
       )}

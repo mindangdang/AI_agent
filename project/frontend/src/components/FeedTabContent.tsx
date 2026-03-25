@@ -53,7 +53,9 @@ export function FeedTabContent({
       }
 
       const responseData = await res.json();
-      if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
+      if (responseData.success && responseData.status === 'processing') {
+        alert(`✨ ${responseData.message}`);
+      } else if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
         const newItems = responseData.data.map((item: any, index: number) => ({
           id: Date.now() + index,
           url: newUrl,
@@ -65,15 +67,20 @@ export function FeedTabContent({
           created_at: new Date().toISOString(),
           summary_text: item.summary_text || ''
         }));
-        onItemsChange((previousItems) => [...newItems, ...previousItems]);
+        onItemsChange([...newItems, ...items]);
       }
 
       setNewUrl("");
-      await refreshTaste();
+      setSessionId("");
+
+      window.setTimeout(() => {
+        void refreshItems();
+        void refreshTaste();
+      }, 3000);
+
     } catch (error: any) {
       console.error(error);
-      alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
-      await refreshItems();
+      alert(`분석 요청 중 오류가 발생했습니다: ${error.message}`);
     } finally {
       setLoading(false);
     }

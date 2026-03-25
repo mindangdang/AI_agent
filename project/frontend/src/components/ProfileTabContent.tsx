@@ -104,6 +104,7 @@ export function ProfileTabContent({
 
   const handleGenerateTaste = async () => {
     setIsGeneratingTaste(true);
+    onTasteChange("");
     try {
       const res = await fetch('/api/generate-taste', { method: 'POST' });
       const data = await res.json();
