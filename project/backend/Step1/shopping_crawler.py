@@ -167,7 +167,6 @@ async def _load_product_page(url: str) -> dict:
             
             return {"html": html, "finalUrl": final_url}
 
-# 끊어져 있던 _load_product_page를 메인 로직에 연결
 async def scrape_product_metadata(url: str) -> dict:
     print(f"[{url}] 메타데이터 추출 파이프라인 시작...")
     
@@ -175,7 +174,6 @@ async def scrape_product_metadata(url: str) -> dict:
     title, brand, price, currency, availability, description, normalized_image_url = "", "", "", "", "", "", ""
 
     try:
-        # 1. 이제 _load_product_page를 호출하여 SPA 사이트를 방어합니다! 
         page_data = await _load_product_page(url)
         html = page_data["html"]
         final_url = page_data["finalUrl"]
