@@ -26,7 +26,7 @@ client = genai.Client(
 )
 
 # ==========================================
-# 2. Pydantic 스키마 (프론트엔드 UI 파괴 방지용)
+# 2. Pydantic 스키마 
 # ==========================================
 class TasteProfileResult(BaseModel):
     persona: str = Field(description="유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀")
