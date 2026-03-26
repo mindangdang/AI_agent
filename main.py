@@ -55,11 +55,6 @@ async def init_db(db_pool: AsyncConnectionPool):
                     UNIQUE(source_url, title)
                   );
                 """)
-                
-                await cursor.execute("""
-                  ALTER TABLE saved_posts
-                  ADD COLUMN IF NOT EXISTS image_url TEXT;
-                """)
 
                 await cursor.execute("""
                   CREATE TABLE IF NOT EXISTS taste_profile (
