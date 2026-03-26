@@ -20,7 +20,6 @@ class ProductFallbackSchema(BaseModel):
     image_url: str
     brand: Optional[str] = ""
     description: Optional[str] = ""
-    reviews: Optional[str] = ""
 
 async def fallback_with_gemini(url: str):
     try:
@@ -82,7 +81,6 @@ async def fallback_with_gemini(url: str):
             "currency": data.currency,
             "image_url": real_image_url,
             "description": data.description,
-            "review": data.reviews,
             "source": "gemini-url-context-backend" 
         }
     except Exception as e:
