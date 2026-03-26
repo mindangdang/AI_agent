@@ -247,6 +247,7 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                     await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
                     
                     # 빌려온 conn을 그대로 전달하여 내부에서 재사용
+                    user_id = "1"
                     await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
                     
                     # 최종 커밋
@@ -255,11 +256,6 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
 
         except Exception as e:
             print(f"[백그라운드] 에러: {str(e)}")
-            
-        # DB 저장 
-        user_id = "1" 
-        await insert_items_to_db(user_id, post_url, extracted_items)
-        print(f"[백그라운드] 작업 및 DB 저장 완료: 총 {len(extracted_items)}개")
 
     except Exception as e:
         print(f"[백그라운드] 전체 프로세스 에러: {str(e)}")
@@ -405,8 +401,8 @@ async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_conn
                     request.url, 
                     request.category, 
                     request.vibe, 
-                    json.dumps(request.facts, ensure_ascii=False),
-                    json.dumps(request.facts.get("reviews", {}), ensure_ascii=False), 
+                    request.facts,               
+                    request.facts.get("reviews"), 
                     request.facts.get("title", "Manual Item"),
                     request.image_url or ""
                 )
