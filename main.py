@@ -152,11 +152,12 @@ class ManualItemCreate(BaseModel):
 # ==========================================
 # 4. [백그라운드 워커] 무거운 크롤링 전담
 # ==========================================
-async def background_crawl_and_save(post_url: str, session_id: Optional[str], rapid_api_key: Optional[str]):
+async def background_crawl_and_save(item_id: int, user_id: str,post_url: str, session_id: Optional[str], rapid_api_key: Optional[str]):
     print(f"[백그라운드] 작업 시작: {post_url}")
     try:
         crawl_result = None
         is_instagram = "instagram.com" in post_url.lower()
+        extracted_items = []
         
         # case1: 인스타 게시물인 경우
         if is_instagram:
@@ -168,15 +169,14 @@ async def background_crawl_and_save(post_url: str, session_id: Optional[str], ra
                     context = await browser.new_context(user_agent="Mozilla/5.0...")
                     await context.add_cookies([{"name": "sessionid", "value": session_id, "domain": ".instagram.com", "path": "/", "httpOnly": True, "secure": True}])
                     page = await context.new_page()
-                    # Playwright 내부 로직이 동기적이므로 thread에 던짐.
-                    crawl_result = await asyncio.to_thread(crawl_instagram_post, page, post_url) 
+                    crawl_result = crawl_instagram_post(page, post_url) 
                     await browser.close()
 
             if not crawl_result or crawl_result.get("error"):
                 print(f"[백그라운드] 크롤링 실패: {crawl_result.get('error')}")
                 return
 
-            raw_downloaded_files = await asyncio.to_thread(download_images, crawl_result.get("image_urls", []), "insta_vibes")
+            raw_downloaded_files = download_images(crawl_result.get("image_urls", []), "insta_vibes")
             downloaded_files = []
             
             for old_path in raw_downloaded_files:
@@ -231,7 +231,15 @@ async def background_crawl_and_save(post_url: str, session_id: Optional[str], ra
                     "key_details": final_key_details
                 }
             }]
-        
+        if not extracted_items:
+            raise Exception("추출된 데이터가 없습니다.")
+
+        async with pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
+                await conn.commit()
+                
+        await insert_items_to_db(user_id, post_url, extracted_items)
         # DB 저장 
         user_id = "1" 
         await insert_items_to_db(user_id, post_url, extracted_items)
@@ -247,21 +255,45 @@ async def background_crawl_and_save(post_url: str, session_id: Optional[str], ra
 
 # [API 1] 크롤링 & 데이터 추출 (즉시 응답)
 @app.post("/api/extract-url")
-async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: BackgroundTasks):
+async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: BackgroundTasks, conn = Depends(get_db_connection)):
     post_url = request.url
     session_id = request.session_id
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
+    user_id = "1"
     
     if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
         raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
 
-    # 백그라운드 큐에 할당
-    background_tasks.add_task(background_crawl_and_save, post_url, session_id, rapid_api_key)
+    # 1. DB에 '처리 중(PROCESSING)' 상태의 빈 껍데기 선 저장
+    try:
+        async with conn.cursor() as cursor:
+            await cursor.execute("""
+                INSERT INTO saved_posts (user_id, source_url, category, title, vibe_text, image_url, facts, reviews) 
+                VALUES (%s, %s, 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}', '{}') 
+                RETURNING id
+            """, (user_id, post_url))
+            new_item_id = (await cursor.fetchone())[0]
+            await conn.commit()
+    except Exception as e:
+        await conn.rollback()
+        raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {str(e)}")
+
+    # 2. 백그라운드 큐에 할당 (new_item_id 전달)
+    background_tasks.add_task(background_crawl_and_save, new_item_id, post_url, session_id, rapid_api_key, user_id)
     
+    # 3. 즉시 리턴 (프론트에서 이 item_id를 받아 폴링 시작)
     return {
         "success": True, 
-        "message": "데이터 추출 및 AI 분석이 시작되었습니다. 잠시 후 피드에 반영됩니다.", 
-        "status": "processing"
+        "message": "데이터 추출 및 AI 분석이 시작되었습니다.", 
+        "item_id": new_item_id,
+        "data": [{
+            "id": new_item_id,
+            "url": post_url,
+            "category": "PROCESSING ",
+            "vibe_text": "AI가 열심히 바이브를 추출하고 있어요 ",
+            "facts": {"title": "분석 중..."},
+            "image_url": "" 
+        }]
     }
 
 # [API 2] 취향 프로필 자동 생성
