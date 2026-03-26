@@ -316,15 +316,30 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
             if not summary:
                 return {"success": False, "message": "취향 분석에 실패했습니다."}
             
-            await cursor.execute(
-                "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
-                (summary,)
-            )
-            await conn.commit()
+            sql = """
+                INSERT INTO taste_profile (id, summary, updated_at) 
+                VALUES (1, %s, CURRENT_TIMESTAMP) 
+                ON CONFLICT (id) 
+                DO UPDATE SET 
+                    summary = EXCLUDED.summary, 
+                    updated_at = CURRENT_TIMESTAMP
+            """
+            try:
+                # summary는 이미 f-string으로 만들어진 문자열이므로 그대로 전달
+                await cursor.execute(sql, (summary,)) 
+                await conn.commit() 
+                print(f"DB 저장 성공: {summary[:30]}...")
+            except Exception as db_e:
+                await conn.rollback() # 에러 발생 시 롤백
+                print(f"DB 실행 중 에러 발생: {db_e}")
+                raise db_e
             
         return {"success": True, "summary": summary}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"취향 분석 실패: {str(e)}")
+        # 구체적인 에러 메시지를 서버 로그에 출력
+        print(f"generate_taste_profile 최종 에러: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
 # [API 3] 에이전틱 큐레이션 검색
 @app.post("/api/agent-search")
@@ -359,17 +374,6 @@ async def save_agent_feedback(request: FeedbackRequest, conn = Depends(get_db_co
                 (str(request.user_id), request.query, request.result, request.feedback_type, request.reason)
             )
             await conn.commit()
-
-            try:
-                summary = await analyze_vibe(user_id=int(request.user_id))
-                if summary:
-                    await cursor.execute(
-                        "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
-                        (summary,)
-                    )
-                    await conn.commit()
-            except Exception as e:
-                print(f"취향 프로필 업데이트 실패: {e}")
 
         return {"success": True, "message": "Feedback saved successfully"}
     except Exception as e:

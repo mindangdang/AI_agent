@@ -127,9 +127,6 @@ def format_data_for_prompt(items: list) -> str:
 # ==========================================
 async def analyze_vibe(user_id: int):
     raw_items = await fetch_user_data_from_neon(user_id)
-
-    if not raw_items:
-        return "취향 데이터를 생성할 수 없습니다. 피드에 아이템을 추가해 주세요."
         
     post_data_string = format_data_for_prompt(raw_items)
     
