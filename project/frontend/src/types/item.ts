@@ -3,7 +3,6 @@ export interface SavedItem {
   url: string;
   category: string;
   facts: Record<string, unknown> | string | null;
-  reviews?: Record<string, unknown> | null;
   vibe: string;
   image_url: string;
   created_at: string;

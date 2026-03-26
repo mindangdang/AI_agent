@@ -61,7 +61,6 @@ export function FeedTabContent({
           url: newUrl,
           category: item.category || 'General',
           facts: item.facts || {},
-          reviews: item.reviews || null,
           vibe: item.vibe_text || 'Extracted',
           image_url: item.image_url || '',
           created_at: new Date().toISOString(),

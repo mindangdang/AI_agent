@@ -36,7 +36,6 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
     facts && typeof facts === 'object'
       ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
       : [];
-  const reviewData = item.reviews || facts;
 
   return (
     <Dialog.Root open onOpenChange={onOpenChange}>
@@ -130,27 +129,6 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                           <p className="text-sm text-gray-400 font-medium">No detailed facts available.</p>
                         )}
                       </div>
-                    </section>
-
-                    <section className="border-t border-gray-100 pt-8">
-                      <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Review Insights</h3>
-                      {reviewData?.star_review || reviewData?.core_summary || reviewData?.review ? (
-                        <div className="bg-gradient-to-tr from-yellow-50 to-orange-50 p-6 rounded-3xl border border-yellow-100/50">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-sm font-black text-yellow-600 uppercase tracking-tight">
-                              {reviewData.star_review || "Recommended"}
-                            </span>
-                            <div className="flex text-yellow-400">
-                              {"★".repeat(Math.min(5, Math.floor(parseFloat(reviewData.star_review) || 5)))}
-                            </div>
-                          </div>
-                          <p className="text-sm font-bold leading-relaxed text-gray-800 tracking-tight">
-                            "{reviewData.core_summary || reviewData.review || "No summary available"}"
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-400 font-medium">No review data extracted for this item.</p>
-                      )}
                     </section>
 
                     {item.url && (

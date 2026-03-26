@@ -74,8 +74,8 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, category, summary_text, image_url, vibe_text, vibe_vector, facts, reviews)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (user_id, source_url, title, category, summary_text, image_url, vibe_text, vibe_vector, facts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
 
@@ -86,13 +86,6 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                 vibe_vector = vector_map.get(vibe_text)
                 
                 facts_data = item.get("facts", {})
-                # reviews 데이터가 문자열일 경우를 대비해 딕셔너리로 강제 변환
-                reviews_data = item.get("reviews")
-                if isinstance(reviews_data, str):
-                    reviews_data = {"core_summary": reviews_data, "star_review": ""}
-                elif not reviews_data:
-                    reviews_data = {}
-
                 title = facts_data.get("title", "Unknown Item")
                 
                 batch_data.append((
@@ -104,8 +97,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                     item.get("image_url") or item.get("local_path") or "",
                     vibe_text, 
                     vibe_vector, 
-                    Json(facts_data), 
-                    Json(reviews_data)
+                    Json(facts_data)
                 ))
 
             # 4. 일괄 실행

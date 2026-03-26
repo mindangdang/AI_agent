@@ -115,7 +115,6 @@ export function SearchTabContent({
         url: "agentic-search",
         category: "INSPIRATION",
         facts: { content: searchResults },
-        reviews: null,
         vibe: `Agentic Search Result: ${searchQuery}`,
         image_url: '',
         created_at: new Date().toISOString(),
