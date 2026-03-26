@@ -6,6 +6,7 @@ from pgvector.psycopg import register_vector_async
 from google import genai
 from dotenv import load_dotenv
 from google.genai import types
+from psycopg.types.json import Json
 
 # 환경변수 세팅 
 load_dotenv()
@@ -103,8 +104,8 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                     item.get("image_url") or item.get("local_path") or "",
                     vibe_text, 
                     vibe_vector, 
-                    facts_data,
-                    reviews_data
+                    Json(facts_data), 
+                    Json(reviews_data)
                 ))
 
             # 4. 일괄 실행

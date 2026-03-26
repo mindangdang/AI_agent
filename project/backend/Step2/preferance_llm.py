@@ -62,7 +62,7 @@ SYSTEM_PROMPT = """
 - 제공된 데이터는 답변에 절대 언급하지 말 것.
 
 [답변 형식(JSON)]
- persona:"유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀"
+persona:"유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀"
 unconscious_taste:"유저의 무의식적인 취향을 날카롭게 분석하는 텍스트 (2~3문장)"
 recommendation:"유저의 취향에 정합하는 새로운 키워드 제시 및 실존하는 장소/물건 추천"
 
@@ -141,7 +141,7 @@ async def analyze_vibe(user_id: int):
         print(f"[User {user_id}] 취향 프로필 분석 중 (Gemini Pro)...")
         # 무거운 LLM 처리는 스레드 풀에서 실행
         response = await client.aio.models.generate_content(
-            model='gemini-2.5-pro', 
+            model='gemini-2.5-flash', 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
@@ -154,7 +154,21 @@ async def analyze_vibe(user_id: int):
         # Pydantic 객체로 파싱된 데이터
         data = response.parsed
         
-        return data.model_dump()
+        # 만약 response.parsed가 정상적인 Pydantic 객체가 아닐 경우 (문자열일 경우 등)
+        if data is None:
+            # fallback: response.text에서 직접 json 파싱 시도
+            import json
+            raw_text = response.text
+            # 마크다운 태그 제거
+            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+            data_dict = json.loads(clean_json)
+            return data_dict # 딕셔너리 형태로 반환
+            
+        # 정상적인 Pydantic 객체인 경우 딕셔너리로 변환
+        if hasattr(data, 'model_dump'):
+            return data.model_dump()
+        
+        return data # 이미 dict인 경우
         
     except Exception as e:
         print(f"LLM 프로필 생성 중 오류 발생: {e}") 

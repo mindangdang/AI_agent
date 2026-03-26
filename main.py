@@ -313,6 +313,7 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
 async def generate_taste_profile(conn = Depends(get_db_connection)):
     try:
         async with conn.cursor() as cursor:
+            # 1. 아이템 존재 여부 체크
             await cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
             row = await cursor.fetchone()
             count = row[0] if row else 0
@@ -320,10 +321,22 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
             if count == 0:
                 return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
             
-            summary = await analyze_vibe(user_id=1)  
-            if not summary:
+            # 2. 분석 실행 (딕셔너리 타입 수신)
+            # analyze_vibe가 data.model_dump()를 리턴하므로 summary_dict는 딕셔너리입니다.
+            summary_dict = await analyze_vibe(user_id=1)  
+            
+            if not summary_dict:
                 return {"success": False, "message": "취향 분석에 실패했습니다."}
             
+            # 3. [핵심 수정] 딕셔너리를 마크다운 문자열로 조립 (AttributeError 방지)
+            # summary_dict는 딕셔너리이므로 .get() 사용 가능!
+            final_summary_text = (
+                f"**페르소나**\n{summary_dict.get('persona', '분석 불가')}\n\n"
+                f"**나도 몰랐던 나의 취향**\n{summary_dict.get('unconscious_taste', '내용 없음')}\n\n"
+                f"**추천**\n{summary_dict.get('recommendation', '추천 없음')}"
+            )
+            
+            # 4. DB 저장 실행
             sql = """
                 INSERT INTO taste_profile (id, summary, updated_at) 
                 VALUES (1, %s, CURRENT_TIMESTAMP) 
@@ -332,21 +345,25 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
                     summary = EXCLUDED.summary, 
                     updated_at = CURRENT_TIMESTAMP
             """
+            
             try:
-                # summary는 이미 f-string으로 만들어진 문자열이므로 그대로 전달
-                await cursor.execute(sql, (summary,)) 
+                # 조립된 마크다운 문자열(final_summary_text)을 전달
+                await cursor.execute(sql, (final_summary_text,)) 
                 await conn.commit() 
-                print(f"DB 저장 성공: {summary[:30]}...")
+                print(f"DB 저장 성공: {final_summary_text[:30]}...")
             except Exception as db_e:
-                await conn.rollback() # 에러 발생 시 롤백
+                await conn.rollback()
                 print(f"DB 실행 중 에러 발생: {db_e}")
                 raise db_e
             
-        return {"success": True, "summary": summary}
+        # 5. 프론트엔드 응답 (조립된 텍스트 전달)
+        return {"success": True, "summary": final_summary_text}
 
     except Exception as e:
-        # 구체적인 에러 메시지를 서버 로그에 출력
+        # 에러 로깅 강화
+        import traceback
         print(f"generate_taste_profile 최종 에러: {str(e)}")
+        print(traceback.format_exc()) # 어디서 .get()이 터졌는지 정확히 알려줌
         raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
 # [API 3] 에이전틱 큐레이션 검색
