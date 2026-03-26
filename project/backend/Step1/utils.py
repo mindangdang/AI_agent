@@ -22,7 +22,8 @@ async def analyze_description_with_gemini(title: str, description: str) -> dict:
         return {"vibe_text": "No description available", "key_details": ""}
 
     prompt = f"""
-    다음 상품설명을 분석하여 'vibe_text'와'key_details'로 분리하고, title을 이용해서 상품의 주요리뷰를 요약해와. 반드시 아래 JSON 형식으로만 반환해. 마크다운 기호 없이 순수 JSON만 출력해.
+    다음 상품설명을 분석하여 'vibe_text'와'key_details'로 분리하고, title을 이용해서 상품의 주요리뷰를 요약해와. 
+    반드시 아래 JSON 형식으로만 반환해. 마크다운 기호 없이 순수 JSON만 출력해.
     
     - vibe_text: 상품이 주는 감성, 무드, 분위기를 묘사하는 1~2문장
     - key_details: 상품의 핵심 스펙, 소재, 핏 등 객관적인 특징 요약
@@ -46,8 +47,7 @@ async def analyze_description_with_gemini(title: str, description: str) -> dict:
             model="gemini-2.5-flash",
             contents=prompt, 
             config=types.GenerateContentConfig(
-                tools=[{"google_search": {}}],
-                response_mime_type="application/json",  
+                tools=[{"google_search": {}}],  
                 temperature=0.1 
             )
         )
