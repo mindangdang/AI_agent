@@ -305,7 +305,7 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
             # 1. 아이템 존재 여부 체크
             await cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
             row = await cursor.fetchone()
-            count = row['total_count'] if row else 0
+            count = row['count'] if row else 0
 
             if count == 0:
                 return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
