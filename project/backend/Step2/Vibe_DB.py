@@ -1,5 +1,5 @@
 import os
-import psycopg2
+import psycopg
 from dotenv import load_dotenv
 
 # 1. 환경변수에서 Neon DB 접속 주소 불러오기
@@ -16,7 +16,7 @@ def initialize_database():
     
     try:
         # DB 연결 및 커서 생성
-        conn = psycopg2.connect(neon_url)
+        conn = psycopg.connect(neon_url)
         cursor = conn.cursor()
 
         # 1. 벡터 검색을 위한 pgvector 확장 프로그램 활성화

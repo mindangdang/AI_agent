@@ -1,8 +1,8 @@
 import os
 import json
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from pgvector.psycopg2 import register_vector
+import psycopg
+from psycopg.rows import dict_row
+from pgvector.psycopg import register_vector
 from fastmcp import FastMCP
 from google import genai
 from google.genai import types
@@ -33,9 +33,9 @@ def fetch_similar_items_from_neon(user_id: int, query_vector: list[float], limit
         return ""
         
     try:
-        conn = psycopg2.connect(NEON_DB_URL)
-        register_vector(conn) # psycopg2에 pgvector 타입 등록
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        conn = psycopg.connect(NEON_DB_URL)
+        register_vector(conn) 
+        cur = conn.cursor(cursor_factory=dict_row)
         
         # 코사인 거리 연산자(<=>)로 의미론적 유사도가 높은 상위 N개 추출
         query = """
