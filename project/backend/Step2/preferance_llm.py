@@ -8,7 +8,8 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import httpx
-from io import BytesIO
+from pathlib import Path
+from urllib.parse import urljoin
 
 # ==========================================
 # 1. 환경 변수 및 설정
@@ -28,6 +29,7 @@ client = genai.Client(
 )
 
 IMAGE_BASE_URL = os.environ.get("IMAGE_BASE_URL", "")
+LOCAL_IMAGE_DIR = Path("insta_vibes")
 
 # ==========================================
 # 2. Pydantic 스키마 
@@ -106,6 +108,18 @@ async def fetch_image_bytes(url: str):
         print(f"이미지 로드 실패 ({url}): {e}")
     return None
 
+async def fetch_local_image_bytes(filename_or_path: str):
+    try:
+        candidate = Path(filename_or_path)
+        if not candidate.is_absolute():
+            candidate = LOCAL_IMAGE_DIR / candidate.name
+
+        if candidate.exists() and candidate.is_file():
+            return candidate.read_bytes()
+    except Exception as e:
+        print(f"로컬 이미지 로드 실패 ({filename_or_path}): {e}")
+    return None
+
 def format_data_for_prompt(item: dict) -> str:
 
     facts = item.get("facts") or {}
@@ -133,14 +147,23 @@ async def analyze_vibe(user_id: int, current_profile: dict):
     for item in raw_items:
         url = item.get("image_url")
         if url:
-            # 프로콜이 없는 경우 베이스 URL 결합
-            if not url.startswith(('http://', 'https://')):
+            if url.startswith(('http://', 'https://')):
+                image_tasks.append(fetch_image_bytes(url))
+                continue
+
+            local_image = await fetch_local_image_bytes(url)
+            if local_image:
+                image_tasks.append(asyncio.sleep(0, result=local_image))
+                continue
+
+            if IMAGE_BASE_URL:
                 clean_url = url.lstrip('/')
-                full_url = f"{IMAGE_BASE_URL}{clean_url}"
-            else:
-                full_url = url
-            
-            image_tasks.append(fetch_image_bytes(full_url))
+                full_url = urljoin(IMAGE_BASE_URL.rstrip('/') + "/", clean_url)
+                image_tasks.append(fetch_image_bytes(full_url))
+                continue
+
+            print(f"이미지 URL 해석 실패 (IMAGE_BASE_URL 미설정): {url}")
+            image_tasks.append(asyncio.sleep(0, result=None))
         else:
             image_tasks.append(asyncio.sleep(0, result=None))
 
