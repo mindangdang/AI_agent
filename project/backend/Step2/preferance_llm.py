@@ -28,7 +28,6 @@ client = genai.Client(
     )
 )
 
-IMAGE_BASE_URL = os.environ.get("IMAGE_BASE_URL", "")
 LOCAL_IMAGE_DIR = Path("insta_vibes")
 
 # ==========================================
@@ -108,7 +107,7 @@ async def fetch_image_bytes(url: str):
         print(f"이미지 로드 실패 ({url}): {e}")
     return None
 
-async def fetch_local_image_bytes(filename_or_path: str):
+def fetch_local_image_bytes(filename_or_path: str):
     try:
         candidate = Path(filename_or_path)
         if not candidate.is_absolute():
@@ -151,18 +150,10 @@ async def analyze_vibe(user_id: int, current_profile: dict):
                 image_tasks.append(fetch_image_bytes(url))
                 continue
 
-            local_image = await fetch_local_image_bytes(url)
+            local_image = fetch_local_image_bytes(url)
             if local_image:
                 image_tasks.append(asyncio.sleep(0, result=local_image))
                 continue
-
-            if IMAGE_BASE_URL:
-                clean_url = url.lstrip('/')
-                full_url = urljoin(IMAGE_BASE_URL.rstrip('/') + "/", clean_url)
-                image_tasks.append(fetch_image_bytes(full_url))
-                continue
-
-            print(f"이미지 URL 해석 실패 (IMAGE_BASE_URL 미설정): {url}")
             image_tasks.append(asyncio.sleep(0, result=None))
         else:
             image_tasks.append(asyncio.sleep(0, result=None))
