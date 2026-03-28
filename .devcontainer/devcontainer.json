@@ -7,13 +7,12 @@
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20",
       "nodeGypDependencies": true
-    },
-    "ghcr.io/just-systems/devcontainer-features/just:1": {}
+    }
   },
   "customizations": {
     "vscode": {
       "extensions": ["ms-python.python"]
     }
   },
-  "postCreateCommand": "pip install -r requirements.txt && sudo npx playwright install --with-deps chromium && if [ -d \"project/frontend\" ]; then cd project/frontend && npm install; fi"
+  "postCreateCommand": "pip install -r requirements.txt && playwright install chromium --with-deps && cd project/frontend && npm install"
 }
