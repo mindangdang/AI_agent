@@ -64,7 +64,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                       item.image_url?.startsWith('http')
                         ? item.image_url
                         : item.image_url
-                          ? `/api/images/${item.image_url}`
+                          ? `{item.image_url}`
                           : 'https://via.placeholder.com/600x600?text=No+Image'
                     }
                     alt={item.category}

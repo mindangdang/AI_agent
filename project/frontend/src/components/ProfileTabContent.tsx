@@ -349,7 +349,7 @@ export function ProfileTabContent({
               onClick={() => onSelectItem(item)}
             >
               <img
-                src={item.image_url?.startsWith('http') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
+                src={item.image_url?.startsWith('http') ? item.image_url : item.image_url ? `{item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
                 className="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
