@@ -434,9 +434,9 @@ async def run_serper_search(request: SearchRequest):
             title = item.get("title", "상품명 없음")
 
             card_item = {
-                "id": str(uuid.uuid4()), # 안전한 고유 ID
-                "category": "FASHION",   # 바이브에 맞게 카테고리 변경
-                "vibe": f"{source}에서 발견한 {price}짜리 아이템", # 센스있는 한 줄
+                "id": str(uuid.uuid4()), 
+                "category": "Product",   
+                "vibe": f"{source}에서 발견한 {price}짜리 아이템", 
                 "image_url": image_url,
                 "url": item.get("link", ""),
                 "summary_text": title,
