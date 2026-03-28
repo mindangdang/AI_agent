@@ -440,35 +440,7 @@ async def run_pse_search(request: SearchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"검색 중 오류 발생: {str(e)}")
 
-
-# [API 4] 피드백 저장
-@app.post("/api/pse/feedback")
-async def save_agent_feedback(request: FeedbackRequest, conn = Depends(get_db_connection)):
-    try:
-        async with conn.cursor() as cursor:
-            await cursor.execute("""
-              CREATE TABLE IF NOT EXISTS search_feedback (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT,
-                query TEXT,
-                result TEXT,
-                feedback_type TEXT,
-                reason TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-              );
-            """)
-            await cursor.execute(
-                "INSERT INTO search_feedback (user_id, query, result, feedback_type, reason) VALUES (%s, %s, %s, %s, %s)",
-                (str(request.user_id), request.query, request.result, request.feedback_type, request.reason)
-            )
-            await conn.commit()
-
-        return {"success": True, "message": "Feedback saved successfully"}
-    except Exception as e:
-        await conn.rollback()
-        raise HTTPException(status_code=500, detail=f"피드백 저장 실패: {str(e)}")
-
-# [API 5] pse 검색결과 아이템 피드로 이동
+# [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
 async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_connection)):
     try:
