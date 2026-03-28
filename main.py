@@ -412,22 +412,16 @@ async def run_serper_search(request: SearchRequest):
 
         items = search_data.get("shopping", [])
         results = []
-        trash_keywords = [
-            "쿠팡", "coupang", "알리", "aliexpress", "테무", "temu", 
-            "11번가", "11st", "g마켓", "gmarket", "옥션", "auction", 
-            "티몬", "tmon", "위메프", "wemakeprice", "인터파크", 
-            "스마트스토어", "smartstore", "네이버 쇼핑"
-        ]
+        hip_sources = ["musinsa", "kream", "soldout", "eql", "worksout", "kasina", "farfetch", "feelway", "fruitsfamily","bunjang"]
 
         for i, item in enumerate(items):
             image_url = item.get("imageUrl", "")
             source = item.get("source", "").lower()
-            link = item.get("link", "").lower()
             
             if not image_url:
                 continue
-            is_trash = any(trash in source or trash in link for trash in trash_keywords)
-            if is_trash:
+            is_hip = any(hip in source for hip in hip_sources)
+            if is_hip:
                 continue
 
             price = item.get("price", "가격 미상")
@@ -435,7 +429,7 @@ async def run_serper_search(request: SearchRequest):
 
             card_item = {
                 "id": str(uuid.uuid4()), 
-                "category": "Product",   
+                "category": "PRODUCT",   
                 "vibe": f"{source}에서 발견한 {price}짜리 아이템", 
                 "image_url": image_url,
                 "url": item.get("link", ""),
