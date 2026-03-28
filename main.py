@@ -130,6 +130,7 @@ class TasteUpdate(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str
+    page: Optional[int] = 1
 
 class FeedbackRequest(BaseModel):
     user_id: str | int
@@ -398,6 +399,7 @@ async def run_serper_search(request: SearchRequest):
     payload = json.dumps({
         "q": request.query,
         "num": 8,      # 카드 8개 정도면 풍성해 보임
+        "page": request.page,
         "gl": "kr",    # 한국 지역 결과 우선
         "hl": "ko"     # 한국어 검색 결과 우선
     })
