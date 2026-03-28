@@ -30,8 +30,7 @@ from project.backend.Step1.utils import analyze_description_with_gemini
 
 load_dotenv()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
-PSE_API = os.environ.get("PSE_API")
-PSE_CX = os.environ.get("PSE_CX")
+SERPER_API_KEY = os.environ.get("SERPER_API_KEY")
 
 # ==========================================
 # 1. 전역 DB 커넥션 풀 관리 & 초기화
@@ -387,58 +386,63 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
 
 # [API 3] pse
 @app.post("/api/pse")
-async def run_pse_search(request: SearchRequest):
-    if not PSE_API or not PSE_CX:
-        raise HTTPException(status_code=500, detail="Google PSE API 키가 설정되지 않았습니다.")
+async def run_serper_search(request: SearchRequest):
+    if not SERPER_API_KEY:
+        raise HTTPException(status_code=500, detail="Serper API 키가 설정되지 않았습니다.")
 
-    url = "https://www.googleapis.com/customsearch/v1"
-    params = {
-        "key": PSE_API,
-        "cx": PSE_CX,
-        "q": request.query,
-        "num": 6  # 카드 형태로 보여줄 개수
+    url = "https://google.serper.dev/search"
+    headers = {
+        'X-API-KEY': SERPER_API_KEY,
+        'Content-Type': 'application/json'
     }
-    
+    payload = json.dumps({
+        "q": request.query,
+        "num": 8,      # 카드 8개 정도면 풍성해 보임
+        "gl": "kr",    # 한국 지역 결과 우선
+        "hl": "ko"     # 한국어 검색 결과 우선
+    })
+
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params)
+            response = await client.post(url, headers=headers, data=payload)
             response.raise_for_status()
             search_data = response.json()
-            
-        items = search_data.get("items", [])
+
+        # Serper는 결과를 'organic' 리스트에 담아줘
+        items = search_data.get("organic", [])
         results = []
-        
-        for item in items:
-            # 1. 구글 검색 결과에서 썸네일/이미지 추출 (pagemap 활용)
-            image_url = ""
-            pagemap = item.get("pagemap", {})
-            if "cse_image" in pagemap and len(pagemap["cse_image"]) > 0:
-                image_url = pagemap["cse_image"][0].get("src", "")
-            elif "cse_thumbnail" in pagemap and len(pagemap["cse_thumbnail"]) > 0:
-                image_url = pagemap["cse_thumbnail"][0].get("src", "")
-                
-            # 2. 도메인 추출 (facts에 예쁘게 보여주기 위함)
-            domain = urllib.parse.urlparse(item.get("link", "")).netloc
+
+        for i, item in enumerate(items):
+            # Serper는 이미지 URL을 'imageUrl' 필드로 바로 주는 경우가 많아 아주 편해!
+            image_url = item.get("imageUrl", "")
+            
+            # 만약 imageUrl이 없다면 사이트 아이콘이나 기본 이미지를 써도 돼
+            if not image_url:
+                # 사이트의 파비콘을 가져오는 꼼수 (선택 사항)
+                domain = urllib.parse.urlparse(item.get("link", "")).netloc
+                image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
 
             card_item = {
-                "id": int(time.time() * 1000) + 1, 
-                "category": "WEB SEARCH",
-                "vibe": item.get("snippet", "설명이 없습니다."),
+                "id": int(time.time() * 1000) + i,
+                "category": "INSIGHT",
+                "vibe": item.get("snippet", "내용 요약이 없습니다."),
                 "image_url": image_url,
                 "url": item.get("link", ""),
                 "summary_text": item.get("snippet", ""),
                 "facts": {
-                    "title": item.get("title", ""), # ItemDetailDialog가 모달 제목으로 사용함
-                    "Source": domain,
-                    "Link": item.get("link", "")
+                    "title": item.get("title", ""),
+                    "source": urllib.parse.urlparse(item.get("link", "")).netloc,
+                    "snippet": item.get("snippet", "")
                 }
             }
             results.append(card_item)
-            
+
         return {"success": True, "results": results}
-        
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"검색 중 오류 발생: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Serper 검색 중 오류: {str(e)}")
 
 # [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
