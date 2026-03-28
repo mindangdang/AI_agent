@@ -387,7 +387,7 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
 # [API 3] pse
 @app.post("/api/pse")
 async def run_pse_search(request: SearchRequest):
-    if not PSE_API or PSE_CX:
+    if not PSE_API or not PSE_CX:
         raise HTTPException(status_code=500, detail="Google PSE API 키가 설정되지 않았습니다.")
 
     url = "https://www.googleapis.com/customsearch/v1"
@@ -420,7 +420,7 @@ async def run_pse_search(request: SearchRequest):
             domain = urllib.parse.urlparse(item.get("link", "")).netloc
 
             card_item = {
-                "id": uuid.uuid4().int >> 64, 
+                "id": int(time.time() * 1000) + i, 
                 "category": "WEB SEARCH",
                 "vibe": item.get("snippet", "설명이 없습니다."),
                 "image_url": image_url,
@@ -480,18 +480,19 @@ async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_conn
                     request.url, 
                     request.category, 
                     request.vibe, 
-                    request.facts,               
+                    json.dumps(request.facts),               
                     request.facts.get("title", "Manual Item"),
                     request.image_url or ""
                 )
             )
             await conn.commit()
 
-        return {"success": True, "message": "에이전트 검색 결과가 내 피드로 이동 되었습니다."}
+        # 수정 2: 응답 메시지 업데이트
+        return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as e:
         await conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {str(e)}")
-
+    
 # ==========================================
 # 6. 일반 CRUD 및 SPA 서빙 엔드포인트
 # ==========================================
