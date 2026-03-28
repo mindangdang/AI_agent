@@ -399,6 +399,7 @@ async def run_serper_search(request: SearchRequest):
 
     payload = json.dumps({
         "q": request.query, 
+        "num": 40,
         "page": request.page, # 더 보기 기능 연동
         "gl": "kr",
         "hl": "ko"
@@ -412,7 +413,7 @@ async def run_serper_search(request: SearchRequest):
 
         items = search_data.get("shopping", [])
         results = []
-        hip_sources = ["musinsa", "kream", "soldout", "eql", "worksout", "kasina", "farfetch", "feelway", "fruitsfamily","bunjang"]
+        hip_sources = ["무신사", "KREAM", "솔드아웃" "한섬 EQL", "필웨이", "후루츠패밀리", "bunjang"]
 
         for i, item in enumerate(items):
             image_url = item.get("imageUrl", "")
@@ -421,7 +422,7 @@ async def run_serper_search(request: SearchRequest):
             if not image_url:
                 continue
             is_hip = any(hip in source for hip in hip_sources)
-            if is_hip:
+            if not is_hip:
                 continue
 
             price = item.get("price", "가격 미상")
