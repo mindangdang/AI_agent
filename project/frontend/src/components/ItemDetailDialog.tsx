@@ -61,7 +61,9 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                 <div className="md:w-1/2 bg-gray-50 flex items-center justify-center overflow-hidden p-8">
                   <img
                     src={
-                      item.image_url?.startsWith('http')
+                      item.image_url?.startsWith('http') || 
+                      item.image_url?.startsWith('data:') || 
+                      item.image_url?.startsWith('//')
                         ? item.image_url
                         : item.image_url
                           ? `/api/images/${item.image_url}`
