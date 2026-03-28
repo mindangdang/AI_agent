@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import html
 import asyncio
 import httpx
 import urllib.parse
@@ -207,6 +208,20 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                 print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
                 return
             
+            raw_image_url = data.get("image_url", "")
+            normalized_image_url = html.unescape(raw_image_url.strip()) if isinstance(raw_image_url, str) else ""
+            if normalized_image_url.startswith("//"):
+                normalized_image_url = f"https:{normalized_image_url}"
+
+            local_image_url = ""
+            if normalized_image_url.startswith("http://") or normalized_image_url.startswith("https://"):
+                downloaded_files = await download_images([normalized_image_url], "insta_vibes")
+                if downloaded_files:
+                    local_image_url = os.path.basename(downloaded_files[0])
+                    print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_image_url}")
+                else:
+                    print(f"[백그라운드] 외부 상품 이미지 다운로드 실패, 원본 URL 유지: {normalized_image_url[:120]}")
+            
             description = data.get("description", "No description available")
             ai_parsed_data = await analyze_description_with_gemini(description)
             brand_info = data.get("brand", "")
@@ -218,7 +233,7 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                 "category": "PRODUCT", 
                 "title": data.get("title", "Unknown"),
                 "vibe_text": ai_parsed_data.get("vibe_text", "No description available"), 
-                "image_url": data.get("image_url", ""), 
+                "image_url": local_image_url or normalized_image_url, 
                 "facts": {
                     "title": data.get("title", ""),
                     "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
@@ -492,19 +507,6 @@ def debug_dist():
 
 if os.path.exists("dist"):
     app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
-
-@app.get("/api/proxy-image")
-async def proxy_image(url: str = Query(..., description="가져올 원본 이미지 URL")):
-    if not url.startswith("http"):
-        raise HTTPException(status_code=400, detail="유효하지 않은 URL입니다.")
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers, follow_redirects=True, timeout=10.0)
-        content_type = response.headers.get("Content-Type", "image/jpeg")
-        return Response(content=response.content, media_type=content_type)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail="이미지를 로드할 수 없습니다.")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
