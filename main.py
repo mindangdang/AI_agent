@@ -5,7 +5,6 @@ import html
 import asyncio
 import httpx
 import urllib.parse
-from time import time
 from fastapi import Query
 from fastapi.responses import Response
 from typing import List, Optional
@@ -17,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from time import time
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row  
 from playwright.async_api import async_playwright
@@ -423,7 +423,7 @@ async def run_serper_search(request: SearchRequest):
                 image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
 
             card_item = {
-                "id": int(time.time() * 1000) + i,
+                "id": str(uuid.uuid4()),
                 "category": "INSIGHT",
                 "vibe": item.get("snippet", "내용 요약이 없습니다."),
                 "image_url": image_url,
