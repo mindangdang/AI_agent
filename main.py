@@ -389,8 +389,7 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
 async def run_serpapi_search(request: SearchRequest):
     if not SERP_API_KEY:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
-    
-    # 1. SerpApi 엔드포인트 (GET 방식을 사용함)
+
     url = "https://serpapi.com/search"
 
     domain_map = {
@@ -402,24 +401,21 @@ async def run_serpapi_search(request: SearchRequest):
     site_query = " | ".join([f"site:{domain}" for domain in domain_map.keys()])
     product_hierarchy_query = "(> products)"
     exclude_list_pages = "-inurl:search -inurl:category -inurl:tags"
-    
     final_query = f"{request.query} ({site_query}) {product_hierarchy_query} {exclude_list_pages}"
     print(f"SerpApi로 쏘는 쿼리: {final_query}")
 
-    # 3. 페이지네이션 (SerpApi는 page가 아니라 start 인덱스를 씀: 0, 25, 50...)
     try:
         current_page = max(1, int(request.page)) if request.page is not None else 1
     except ValueError:
         current_page = 1
-    
     start_index = (current_page - 1) * 25
 
-    # 4. 페이로드 대신 Query Parameters 조합
     params = {
         "engine": "google",
         "q": final_query,
         "api_key": SERP_API_KEY,
         "num": 25,
+        "tbm": "isch",
         "start": start_index, # 페이징 적용
         "gl": "kr",
         "hl": "ko"
@@ -428,76 +424,54 @@ async def run_serpapi_search(request: SearchRequest):
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, params=params)
-            
             if response.status_code != 200:
                 print(f"SerpApi 에러 내용: {response.text}")
                 
             response.raise_for_status()
             search_data = response.json()
 
-        # 5. SerpApi는 'organic' 대신 'organic_results'라는 키를 씀
-        items = search_data.get("organic_results", [])
+        items = search_data.get("images_results", [])
         results = []
+        print(f"SerpApi가 가져온 전체 원본 데이터 개수: {len(items)}")
 
         for i, item in enumerate(items):
-            link = item.get("link", "")
+            link = item.get("link", "") # 상품 페이지 링크
             title = item.get("title", "상품명 없음")
-            snippet = item.get("snippet", "")
             
-            image_url = ""
-            price = "가격 미상"
-            source = "알 수 없는 샵"
+            # SerpApi 이미지 검색은 'original'(고화질)과 'thumbnail'(저화질) 둘 다 줌
+            image_url = item.get("original", "") 
+            if not image_url:
+                image_url = item.get("thumbnail", "")
 
-            # --- [데이터 파싱: SerpApi 맞춤형 초간단 로직] ---
-            
-            # A. 출처(Source) 매핑
+            # 출처(Source) 매핑 (기존 로직 동일)
+            source = item.get("source", "알 수 없는 샵") # 이미지 검색은 source도 깔끔하게 줌
             for domain, name in domain_map.items():
                 if domain in link:
                     source = name
                     break
-
-            # B. 이미지 추출 (pagemap을 안 뒤져도 됨!)
-            # 구글 검색 결과에 이미지가 같이 뜨면 SerpApi가 'thumbnail' 키로 바로 뽑아줌
-            image_url = item.get("thumbnail", "")
-
-            # 이미지가 구글 화면에 안 떴다면 상품 페이지로서의 매력이 떨어지니 스킵
-            if not image_url:
-                continue
-
-            # C. 가격 추출
-            # SerpApi는 가격 같은 부가 정보를 'rich_snippet'에 예쁘게 담아주는 경우가 많음
-            extracted_price = item.get("rich_snippet", {}).get("top", {}).get("detected_extensions", {}).get("price")
             
-            if extracted_price:
-                # 숫자형(예: 129000)으로 오면 포맷팅
-                price = f"{extracted_price:,.0f}원" if isinstance(extracted_price, (int, float)) else f"{extracted_price}원"
-            else:
-                # 텍스트 형태(extensions 배열)에서 '원'이나 '₩'가 들어간 문자열 찾기
-                extensions = item.get("rich_snippet", {}).get("top", {}).get("extensions", [])
-                for ext in extensions:
-                    if "원" in ext or "₩" in ext:
-                        price = ext
-                        break
-
-            # --------------------
+            # 가격 정보: 이미지 검색 API는 가격을 별도로 안 줄 때가 많음
+            # 제목(title)에 가격이 섞여 있는 경우가 아니면 일단 '가격 미상'으로 처리
+            price = "가격 미상" 
 
             card_item = {
                 "id": str(uuid.uuid4()), 
                 "category": "PRODUCT",   
-                "vibe": f"{source}에서 발견한 {price}짜리 아이템", 
+                "vibe": f"{source}에서 발견한 힙한 아이템", 
                 "image_url": image_url,
                 "url": link,
                 "summary_text": title,
-                "description": snippet,
                 "facts": {
                     "title": title,
-                    "Price": price,
+                    "Price": price, # 가격이 꼭 필요하다면 별도 크롤링 봇을 태워야 함
                     "Shop": source
                 }
             }
             results.append(card_item)
-
+        
+        print(f"최종결과 개수: {len(results)}")
         return {"success": True, "results": results}
+
 
     except Exception as e:
         import traceback
