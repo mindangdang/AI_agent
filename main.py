@@ -477,53 +477,6 @@ async def run_serpapi_search(request: SearchRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {str(e)}")
-    '''
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers, data=payload)
-            response.raise_for_status()
-            search_data = response.json()
-
-        items = search_data.get("shopping", [])
-        results = []
-
-        for i, item in enumerate(items):
-            image_url = item.get("imageUrl", "")
-            source = item.get("source", "").lower()
-            
-            if not image_url:
-                continue
-
-            #hip_sources = ["무신사", "KREAM", "솔드아웃", "한섬 EQL", "필웨이", "후루츠패밀리", "bunjang"] 
-            #is_hip = any(hip in source for hip in hip_sources) 
-
-            #if not is_hip: 
-                #continue
-
-            price = item.get("price", "가격 미상")
-            title = item.get("title", "상품명 없음")
-
-            card_item = {
-                "id": str(uuid.uuid4()), 
-                "category": "PRODUCT",   
-                "vibe": f"{source}에서 발견한 {price}짜리 아이템", 
-                "image_url": image_url,
-                "url": item.get("link", ""),
-                "summary_text": title,
-                "facts": {
-                    "title": title,
-                    "Price": price,
-                    "Shop": source
-                }
-            }
-            results.append(card_item)
-
-        return {"success": True, "results": results}
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {str(e)}") '''
 
 # [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
