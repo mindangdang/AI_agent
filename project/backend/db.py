@@ -1,7 +1,8 @@
 import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Awaitable, Callable
+from psycopg import InterfaceError, OperationalError
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -52,15 +53,49 @@ def create_db_pool(conninfo: str, min_size: int = 5, max_size: int = 20) -> Asyn
     return AsyncConnectionPool(conninfo=conninfo, min_size=min_size, max_size=max_size)
 
 
-async def get_db_connection(pool: AsyncConnectionPool | None) -> AsyncGenerator[Any, None]:
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database pool is not initialized")
+async def _ping_connection(conn: Any) -> None:
+    # Serverless DB는 idle 이후 기존 connection이 stale 상태가 될 수 있어서,
+    # 풀에서 꺼낸 직후 가벼운 ping으로 실제 연결 가능 여부를 확인한다.
+    async with conn.cursor() as cursor:
+        await cursor.execute("SELECT 1")
+        await cursor.fetchone()
 
-    conn = await pool.getconn()
-    try:
-        yield conn
-    finally:
-        await pool.putconn(conn)
+
+async def get_db_connection(
+    pool: AsyncConnectionPool | None,
+    recreate_pool: Callable[[], Awaitable[AsyncConnectionPool]] | None = None,
+) -> AsyncGenerator[Any, None]:
+    current_pool = pool
+
+    for attempt in range(2):
+        if current_pool is None or current_pool.closed:
+            if recreate_pool is None:
+                raise HTTPException(status_code=500, detail="Database pool is not initialized")
+            current_pool = await recreate_pool()
+
+        conn = None
+        pool_used = current_pool
+        try:
+            conn = await pool_used.getconn()
+            await _ping_connection(conn)
+            yield conn
+            return
+        except (OperationalError, InterfaceError) as e:
+            if conn is not None:
+                try:
+                    await conn.close()
+                except Exception:
+                    pass
+
+            if recreate_pool is None or attempt == 1:
+                raise HTTPException(status_code=500, detail=f"Database connection is unavailable: {e}") from e
+
+            current_pool = await recreate_pool()
+        finally:
+            if conn is not None and not getattr(conn, "closed", False):
+                await pool_used.putconn(conn)
+
+    raise HTTPException(status_code=500, detail="Database connection is unavailable")
 
 
 @dataclass(slots=True)

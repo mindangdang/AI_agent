@@ -37,6 +37,25 @@ SERP_API_KEY = os.environ.get("SERP_API_KEY")
 
 pool: AsyncConnectionPool = None
 
+
+async def rebuild_db_pool() -> AsyncConnectionPool:
+    global pool
+
+    if not NEON_DB_URL:
+        raise RuntimeError("NEON_DB_URL environment variable is not set.")
+
+    old_pool = pool
+    pool = create_db_pool(conninfo=NEON_DB_URL, min_size=5, max_size=20)
+
+    if old_pool is not None and not old_pool.closed:
+        try:
+            await old_pool.close()
+        except Exception as e:
+            print(f"기존 DB 풀 종료 중 경고: {e}")
+
+    print("DB 커넥션 풀 재생성 완료")
+    return pool
+
 # FastAPI 라이프사이클
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,7 +64,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("NEON_DB_URL environment variable is not set.")
     
     # 트래픽에 맞춰 최소 5개 ~ 최대 20개의 연결을 유지하는 풀 생성
-    pool = create_db_pool(conninfo=NEON_DB_URL, min_size=5, max_size=20)
+    pool = await rebuild_db_pool()
     print("DB 커넥션 풀 생성 완료")
     
     # 풀이 생성되면 테이블 스키마 확인
@@ -75,7 +94,7 @@ app.add_middleware(
 
 # 의존성(Dependency) 주입 함수
 async def get_db_connection():
-    async for conn in get_pooled_db_connection(pool):
+    async for conn in get_pooled_db_connection(pool, recreate_pool=rebuild_db_pool):
         yield conn
 
 
