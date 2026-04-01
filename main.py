@@ -24,17 +24,11 @@ from project.backend.Step2.insert_DB import insert_items_to_db
 from project.backend.Step2.preferance_llm import analyze_vibe      
 from project.backend.Step1.utils import analyze_description_with_gemini
 from project.backend.db import (
+    Repositories,
     create_db_pool,
-    create_manual_item,
-    create_processing_item,
-    delete_saved_post_by_id,
-    fetch_items,
-    fetch_taste_profile,
     get_db_connection as get_pooled_db_connection,
-    get_latest_taste_summary,
+    get_repositories,
     init_db,
-    upsert_taste_profile,
-    count_saved_posts,
 )
 
 load_dotenv()
@@ -83,6 +77,10 @@ app.add_middleware(
 async def get_db_connection():
     async for conn in get_pooled_db_connection(pool):
         yield conn
+
+
+async def get_repos(conn=Depends(get_db_connection)) -> Repositories:
+    return get_repositories(conn)
 
 # ==========================================
 # 3. Pydantic Models 
@@ -215,7 +213,8 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
 
         try:
             async with pool.connection() as conn:
-                await delete_saved_post_by_id(conn, item_id)
+                repos = get_repositories(conn)
+                await repos.saved_posts.delete_by_id(item_id)
 
                 # 빌려온 conn을 그대로 전달하여 내부에서 재사용
                 user_id = "1"
@@ -238,7 +237,11 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
 
 # [API 1] 크롤링 & 데이터 추출 (즉시 응답)
 @app.post("/api/extract-url")
-async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: BackgroundTasks, conn = Depends(get_db_connection)):
+async def extract_and_save_url(
+    request: UrlAnalyzeRequest,
+    background_tasks: BackgroundTasks,
+    repos: Repositories = Depends(get_repos),
+):
     post_url = request.url
     session_id = request.session_id
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
@@ -249,9 +252,9 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
 
     # 1. DB에 '처리 중(PROCESSING)' 상태의 빈 껍데기 선 저장
     try:
-        new_item_id = await create_processing_item(conn, user_id, post_url)
+        new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
     except Exception as e:
-        await conn.rollback()
+        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {str(e)}")
 
     # 2. 백그라운드 큐에 할당 
@@ -274,14 +277,14 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
 
 # [API 2] 취향 프로필 생성
 @app.post("/api/generate-taste")
-async def generate_taste_profile(conn = Depends(get_db_connection)):
+async def generate_taste_profile(repos: Repositories = Depends(get_repos)):
     try:
         # 1. 아이템 존재 여부 체크
-        count = await count_saved_posts(conn, "1")
+        count = await repos.saved_posts.count_by_user_id("1")
         if count == 0:
             return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
 
-        existing_summary = await get_latest_taste_summary(conn)
+        existing_summary = await repos.taste_profile.get_latest_summary()
         current_profile = {"persona": "정보 없음", "unconscious_taste": "데이터 부족", "recommendation": "데이터 부족"}
 
         if existing_summary:
@@ -306,10 +309,10 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
         )
 
         try:
-            await upsert_taste_profile(conn, final_summary_text)
+            await repos.taste_profile.upsert_summary(final_summary_text)
             print(f"DB 저장 성공: {final_summary_text[:30]}...")
         except Exception as db_e:
-            await conn.rollback()
+            await repos.taste_profile.conn.rollback()
             print(f"DB 실행 중 에러 발생: {db_e}")
             raise db_e
 
@@ -419,10 +422,9 @@ async def run_serpapi_search(request: SearchRequest):
 
 # [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
-async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_connection)):
+async def save_manual_item(request: ManualItemCreate, repos: Repositories = Depends(get_repos)):
     try:
-        await create_manual_item(
-            conn,
+        await repos.saved_posts.create_manual_item(
             user_id=str(request.user_id),
             url=request.url,
             category=request.category,
@@ -432,16 +434,16 @@ async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_conn
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as e:
-        await conn.rollback()
+        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {str(e)}")
     
 # ==========================================
 # 6. 일반 CRUD 및 SPA 서빙 엔드포인트
 # ==========================================
 @app.get("/api/items")
-async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
+async def get_items(user_id: str = "1", repos: Repositories = Depends(get_repos)):
     try:
-        items = await fetch_items(conn, user_id)
+        items = await repos.saved_posts.list_feed_items(user_id)
         print(f"프론트로 보내는 아이템 수: {len(items)}")
         return items
     except Exception as e:
@@ -449,19 +451,19 @@ async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
         return []
 
 @app.delete("/api/items/{item_id}")
-async def delete_item(item_id: int, conn = Depends(get_db_connection)):
+async def delete_item(item_id: int, repos: Repositories = Depends(get_repos)):
     try:
-        await delete_saved_post_by_id(conn, item_id)
-        await conn.commit()
+        await repos.saved_posts.delete_by_id(item_id)
+        await repos.saved_posts.conn.commit()
         return {"success": True}
     except Exception as e:
-        await conn.rollback()
+        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/taste")
-async def get_taste(conn = Depends(get_db_connection)):
+async def get_taste(repos: Repositories = Depends(get_repos)):
     try:
-        return await fetch_taste_profile(conn)
+        return await repos.taste_profile.get_profile()
     except Exception as e:
         print(f"취향 프로필 조회 에러: {e}")
         return {"summary": ""}
