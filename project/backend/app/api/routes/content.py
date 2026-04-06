@@ -130,6 +130,7 @@ async def run_serpapi_search(payload: SearchRequest):
             title = item.get("title", "상품명 없음")
             image_url = item.get("original", "") or item.get("thumbnail", "")
 
+            extracted_price = item.get("price", "가격 미상")
             source = item.get("source", "알 수 없는 샵")
             for domain, name in domain_map.items():
                 if domain in link:
@@ -146,7 +147,7 @@ async def run_serpapi_search(payload: SearchRequest):
                     "summary_text": title,
                     "facts": {
                         "title": title,
-                        "Price": "가격 미상",
+                        "Price": extracted_price,
                         "Shop": source,
                     },
                 }
