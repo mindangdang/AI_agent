@@ -90,6 +90,7 @@ async def run_serpapi_search(payload: SearchRequest):
     }
 
     extended_query = await optimize_query_with_llm(payload.query)
+    extended_query = extended_query.get('final_query', payload.query)
 
     site_query = " | ".join([f"site:{domain}" for domain in domain_map])
     product_hierarchy_query = "(> products)"

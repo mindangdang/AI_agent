@@ -40,11 +40,11 @@ async def optimize_query_with_llm(user_query: str):
 
     [학습된 패턴 적용 예시]
     입력: "숏패딩"
-    출력: {'final_query': "\"다운 점퍼\" (푸퍼 OR 라이트웨이트 OR 헤비아우터)"}
+    출력: {{'final_query': "\"다운 점퍼\" (푸퍼 OR 라이트웨이트 OR 헤비아우터)"}}
 
     입력: "워싱 데님"
     출력: 
-    {'final_query': "\"워시드 데님 팬츠\" (가먼트 다잉 OR 빈티지 워싱 OR 엠보스드 OR 피그먼트)"}
+    {{'final_query': "\"워시드 데님 팬츠\" (가먼트 다잉 OR 빈티지 워싱 OR 엠보스드 OR 피그먼트)"}}
 
 
     반드시 아래의 순수 JSON 객체 포맷으로만 반환해:
