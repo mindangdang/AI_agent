@@ -11,7 +11,7 @@ from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest
 from project.backend.app.services.crawling import DEFAULT_USER_ID, background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
-
+from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
 
 load_backend_env()
 
@@ -161,6 +161,95 @@ async def run_serpapi_search(payload: SearchRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {exc}") from exc
 
+class LensSearchRequest(BaseModel):
+    image_url: str = Field(..., description="Supabase 등에 업로드된 퍼블릭 이미지 URL")
+    page: int = 1
+
+@router.post("/rense")
+async def run_serpapi_lens_search(payload: LensSearchRequest):
+    serp_api_key = os.environ.get("SERP_API_KEY")
+    if not serp_api_key:
+        raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
+
+    url = "https://serpapi.com/search"
+    domain_map = {
+        "musinsa.com": "무신사",
+        "kream.co.kr": "KREAM",
+        "fruitsfamily.com": "후루츠패밀리",
+        "kasina.co.kr": "카시나",
+        "heights-store.com": "하이츠스토어",
+        "8division.com": "에잇디비젼",
+        "worksout.co.kr": "웍스아웃",
+        "iamshop-online.com": "아이엠샵",
+        "samplas.co.kr": "샘플라스",
+        "etcseoul.com": "etcseoul",
+        "zara.com": "자라",
+        "fetching.co.kr": "페칭",
+        "empty.seoul.kr": "무신사 엠프티"
+    }
+
+    params = {
+        "engine": "google_lens",  # 구글 렌즈 엔진 사용
+        "url": payload.image_url, # 텍스트(q) 대신 이미지 URL 투입
+        "api_key": serp_api_key,
+        "hl": "ko",
+        "gl": "kr"
+    }
+
+    print(f"SerpApi(Google Lens)로 디깅 시작: {payload.image_url}")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params)
+            if response.status_code != 200:
+                print(f"SerpApi 에러 내용: {response.text}")
+            response.raise_for_status()
+            search_data = response.json()
+
+        items = search_data.get("visual_matches", [])
+        print(f"구글 렌즈가 가져온 전체 원본 데이터 개수: {len(items)}")
+
+        results = []
+        for item in items:
+            link = item.get("link", "")
+            title = item.get("title", "상품명 없음")
+            image_url = item.get("thumbnail", "")
+            extracted_price = item.get("price", "가격 미상")
+            
+            is_valid_source = False
+            source_name = "알 수 없는 샵"
+            
+            for domain, name in domain_map.items():
+                if domain in link:
+                    is_valid_source = True
+                    source_name = name
+                    break
+
+            if not is_valid_source:
+                continue
+
+            results.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "category": "PRODUCT",
+                    "recommend": f"{source_name}에서 발견한 힙한 아이템",
+                    "image_url": image_url,
+                    "url": link,
+                    "summary_text": title,
+                    "facts": {
+                        "title": title,
+                        "Price": extracted_price,
+                        "Shop": source_name,
+                    },
+                }
+            )
+
+        print(f" 통과한 최종결과 개수: {len(results)}")
+        return {"success": True, "results": results}
+        
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
 
 @router.post("/items/manual")
 async def save_manual_item(

@@ -18,18 +18,6 @@ if not url or not key:
 class VibeGenerateRequest(BaseModel):
     prompt: str = Field(..., description="유저가 원하는 패션 아이템 (예: '연청 워시드 크롭 데님 자켓')")
 
-class LensSearchResult(BaseModel):
-    title: str
-    link: str
-    source: str
-    thumbnail: str
-    price: str = "가격 미상" 
-
-class VibeSearchResponse(BaseModel):
-    success: bool
-    generated_vibe_image_url: str 
-    recommended_items: list[LensSearchResult]
-
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
@@ -73,9 +61,7 @@ supabase: Client = create_client(url, key)
 BUCKET_NAME = "vibe-images"
 
 async def upload_generated_image(image_bytes: bytes) -> str:
-    """
-    생성된 이미지를 Supabase Storage에 업로드하고 퍼블릭 URL을 반환합니다.
-    """
+
     file_name = f"generated/{uuid.uuid4().hex}.jpg"
 
     # Supabase SDK는 동기식 방식이 섞여 있으므로 안전하게 스레드에서 실행
@@ -95,8 +81,8 @@ async def upload_generated_image(image_bytes: bytes) -> str:
             print(f"Supabase 업로드 에러: {e}")
             raise Exception("클라우드 이미지 저장에 실패했습니다.")
 
-    print("☁️ Supabase로 이미지 업로드 중...")
+    print("Supabase로 이미지 업로드 중...")
     public_url = await asyncio.to_thread(_upload)
     
-    print(f"✅ 업로드 완료! 퍼블릭 URL: {public_url}")
+    print(f"업로드 완료! 퍼블릭 URL: {public_url}")
     return public_url
