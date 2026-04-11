@@ -1,4 +1,4 @@
-#POSE! 
+# POSE! 
 
 User preference based Digging Web with AI.
 
