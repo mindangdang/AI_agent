@@ -119,7 +119,7 @@ async def _load_product_page(url: str) -> dict:
             html = response.text
             final_url = str(response.url)
 
-            is_js_heavy = any(domain in url for domain in ["musinsa.com", "kream.co.kr", "zara.com"])
+            is_js_heavy = any(domain in url for domain in ["m.bunjang.co.kr", "musinsa.com", "kream.co.kr", "zara.com"])
             # <script>는 모든 페이지에 있으므로 판단 기준에서 제외하고, 핵심 메타태그 유무로만 판단
             if is_js_heavy or ("og:title" not in html and "application/ld+json" not in html):
                 print(f"[{url}] JS 렌더링 필요. Playwright 가동...")
@@ -215,6 +215,15 @@ async def scrape_product_metadata(url: str) -> dict:
             currency = _extract_meta_content(soup, "product:price:currency") or _extract_meta_content(soup, "og:price:currency")
 
         normalized_image_url = urljoin(final_url, image_url) if image_url else ""
+
+        if "bunjang.co.kr" in final_url or "bjn.co.kr" in final_url:
+            # 제목이나 설명에 번개장터 기본 멘트가 들어있다면, 메타태그에 속은 것!
+            if "번개장터" in title or title == "취향을 잇는 거래":
+                title = "" 
+            if "중고거래" in description or "번개장터" in description:
+                description = ""
+            if "logo" in normalized_image_url.lower() or "bg_icon" in normalized_image_url.lower():
+                normalized_image_url = "" 
 
         # --- 1차 방어막: 파싱이 실패하면(제목이나 이미지가 없으면) Gemini 폴백 ---
         if not title or not normalized_image_url:
