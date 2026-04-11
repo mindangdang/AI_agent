@@ -34,7 +34,7 @@ async def get_vibe_vectors_batch(texts: list[str]) -> dict:
 
     try:
         print(f"{len(valid_texts)}개의 바이브 텍스트를 한 번에 임베딩합니다...")
-        # 동기식 API 호출을 방어하기 위해 스레드 풀로 넘김
+        # 네이티브 비동기 클라이언트로 직접 호출!
         response = await client.aio.models.embed_content(
             model=MODEL_NAME,
             contents=valid_texts, 
@@ -55,22 +55,21 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
     if not extracted_items:
         return
 
-    # 1. 바이브 텍스트 벡터화
-    recommends = [item.get("recommend", "") for item in extracted_items]
-    vector_map = await get_vibe_vectors_batch(recommends)
+    #recommends = [item.get("recommend", "") for item in extracted_items]
+    #vector_map = await get_vibe_vectors_batch(recommends)
 
     try:
         # 2. 외부에서 conn을 넘겨받지 않았다면 새로 연결 (유연성 확보)
         # 만약 pool에서 관리하는 conn을 넘겨받는다면 context manager를 쓰지 않도록 주의
         
         # DB 커넥션에 벡터 타입 등록 (필요 시)
-        await register_vector_async(conn)
+        #await register_vector_async(conn)
         
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, category, summary_text, image_url, recommend, vibe_vector, facts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (user_id, source_url, title, category, summary_text, image_url, recommend, facts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
 
@@ -78,7 +77,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
             batch_data = []
             for item in extracted_items:
                 recommend = item.get("recommend", "")
-                vibe_vector = vector_map.get(recommend)
+                #vibe_vector = vector_map.get(recommend)
                 
                 facts_data = item.get("facts", {})
                 title = facts_data.get("title", "Unknown Item")
@@ -91,7 +90,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                     item.get("summary_text"),
                     item.get("image_url") or item.get("local_path") or "",
                     recommend, 
-                    vibe_vector, 
+                    #vibe_vector, 
                     Json(facts_data)
                 ))
 
