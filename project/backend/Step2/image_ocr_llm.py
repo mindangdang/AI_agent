@@ -91,7 +91,7 @@ async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: 
 
     contents = [prompt_ocr] + images + [text_input]
 
-    response_ocr = await client.models.generate_content_async(
+    response_ocr = await client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
         config=types.GenerateContentConfig(
