@@ -20,7 +20,7 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                         category TEXT,
                         summary_text TEXT,
                         image_url TEXT,
-                        vibe_text TEXT,
+                        recommend TEXT,
                         vibe_vector vector(768),
                         facts JSONB,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

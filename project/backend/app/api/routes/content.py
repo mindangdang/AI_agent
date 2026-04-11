@@ -58,7 +58,7 @@ async def extract_and_save_url(
                 "id": new_item_id,
                 "url": post_url,
                 "category": "PROCESSING ",
-                "vibe_text": "AI가 열심히 바이브를 추출하고 있어요 ",
+                "recommend": "AI가 열심히 바이브를 추출하고 있어요 ",
                 "facts": {"title": "분석 중..."},
                 "image_url": "",
             }
@@ -143,7 +143,7 @@ async def run_serpapi_search(payload: SearchRequest):
                 {
                     "id": str(uuid.uuid4()),
                     "category": "PRODUCT",
-                    "vibe": f"{source}에서 발견한 힙한 아이템",
+                    "recommend": f"{source}에서 발견한 힙한 아이템",
                     "image_url": image_url,
                     "url": link,
                     "summary_text": title,

@@ -83,7 +83,7 @@ async def fetch_user_data_from_neon(user_id: int):
         async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT facts, vibe_text, category, title, summary_text, image_url
+                    SELECT facts, recommend, category, title, summary_text, image_url
                     FROM saved_posts
                     WHERE user_id = %s
                     ORDER BY created_at DESC
@@ -130,7 +130,7 @@ def format_data_for_prompt(item: dict) -> str:
     - Category: {item.get('category', 'UNKNOWN')}
     - Location: {location}
     - Summary: {item.get('summary_text', '')}
-    - Vibe: {item.get('vibe_text', '')}
+    - recommend: {item.get('recommend', '')}
     - Key Details: {key_details} """
     
     return post_text

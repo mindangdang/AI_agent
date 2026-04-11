@@ -18,7 +18,7 @@ class SavedPostsRepository:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, title, vibe_text, image_url, facts)
+                INSERT INTO saved_posts (user_id, source_url, category, title, recommend, image_url, facts)
                 VALUES (%s, %s, 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}')
                 RETURNING id
                 """,
@@ -39,21 +39,21 @@ class SavedPostsRepository:
         user_id: str,
         url: str,
         category: str,
-        vibe: str,
+        recommend: str,
         facts: dict,
         image_url: str = "",
     ) -> None:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, title, image_url)
+                INSERT INTO saved_posts (user_id, source_url, category, recommend, facts, title, image_url)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
                     url,
                     category,
-                    vibe,
+                    recommend,
                     json.dumps(facts),
                     facts.get("title", "Manual Item"),
                     image_url,
@@ -70,7 +70,7 @@ class SavedPostsRepository:
                     source_url as url,
                     category,
                     facts,
-                    vibe_text as vibe,
+                    recommend as vibe,
                     image_url,
                     summary_text,
                     created_at

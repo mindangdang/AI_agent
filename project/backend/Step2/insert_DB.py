@@ -61,8 +61,8 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         return
 
     # 1. 바이브 텍스트 벡터화
-    vibe_texts = [item.get("vibe_text", "") for item in extracted_items]
-    vector_map = await get_vibe_vectors_batch(vibe_texts)
+    recommends = [item.get("recommend", "") for item in extracted_items]
+    vector_map = await get_vibe_vectors_batch(recommends)
 
     try:
         # 2. 외부에서 conn을 넘겨받지 않았다면 새로 연결 (유연성 확보)
@@ -74,7 +74,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, category, summary_text, image_url, vibe_text, vibe_vector, facts)
+                (user_id, source_url, title, category, summary_text, image_url, recommend, vibe_vector, facts)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
@@ -82,8 +82,8 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
             # 3. DB 데이터 준비
             batch_data = []
             for item in extracted_items:
-                vibe_text = item.get("vibe_text", "")
-                vibe_vector = vector_map.get(vibe_text)
+                recommend = item.get("recommend", "")
+                vibe_vector = vector_map.get(recommend)
                 
                 facts_data = item.get("facts", {})
                 title = facts_data.get("title", "Unknown Item")
@@ -95,7 +95,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                     item.get("category"), 
                     item.get("summary_text"),
                     item.get("image_url") or item.get("local_path") or "",
-                    vibe_text, 
+                    recommend, 
                     vibe_vector, 
                     Json(facts_data)
                 ))

@@ -34,7 +34,7 @@ def initialize_database():
             category VARCHAR(20),
             summary_text TEXT,
             
-            vibe_text TEXT,
+            recommend TEXT,
             vibe_vector VECTOR(768), 
             
             facts JSONB,

@@ -3,6 +3,7 @@ import re
 import os
 import uuid
 import asyncio
+import random
 import httpx
 from typing import Dict
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -21,6 +22,9 @@ CAPTION_CANDIDATES = [
     "span._ap3a",
 ]
 
+async def human_delay(min_sec: float = 0.8, max_sec: float = 2.0):
+    await asyncio.sleep(random.uniform(min_sec, max_sec))
+
 async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str, object]:
     result = {
         "post_url": post_url,
@@ -35,6 +39,7 @@ async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dic
 
     try:
         # 페이지 이동 및 로드 대기
+        await human_delay(0.5, 1.5)
         await page.goto(post_url, wait_until="domcontentloaded")
         
         try:
@@ -79,7 +84,7 @@ async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dic
         for _ in range(max_slides):
             # 화면이 로드되고 슬라이드가 넘어갈 시간을 잠깐 줌
             await page.wait_for_timeout(500)
-            
+            await human_delay(1.2, 2.5)
             # 비디오 여부 체크
             if await post_container.locator(VIDEO_SELECTOR).count() > 0:
                 is_video = True
@@ -100,6 +105,8 @@ async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dic
             # 다음 슬라이드 버튼 찾기 및 클릭
             next_btn = post_container.locator(NEXT_BUTTON_SELECTOR).first
             if await next_btn.is_visible():
+                await next_btn.hover()
+                await human_delay(0.2, 0.6)
                 await next_btn.click()
                 await page.wait_for_timeout(1000) # 슬라이드 애니메이션 대기
             else:
@@ -119,6 +126,12 @@ async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dic
         result["error"] = str(e)
 
     return result
+
+FAKE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Referer": "https://www.instagram.com/",
+    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+}
 
 # 단일 이미지 다운로드용 헬퍼 함수 (Non-blocking 파일 저장)
 async def _download_single_image(client: httpx.AsyncClient, url: str, save_dir: str) -> str:
@@ -150,7 +163,7 @@ async def download_images(image_urls: list, save_dir: str = "insta_vibes") -> li
     os.makedirs(save_dir, exist_ok=True)
 
     # 모든 이미지를 동시에 병렬 다운로드
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers=FAKE_HEADERS, http2=True) as client:
         tasks = [_download_single_image(client, url, save_dir) for url in image_urls]
         results = await asyncio.gather(*tasks)
 

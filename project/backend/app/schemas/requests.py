@@ -28,7 +28,7 @@ class FeedbackRequest(BaseModel):
 class ManualItemCreate(BaseModel):
     user_id: str | int
     category: str
-    vibe: str
+    recommend: str
     facts: dict
     url: str
     image_url: Optional[str] = ""

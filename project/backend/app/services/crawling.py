@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 
 from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
@@ -71,20 +72,22 @@ async def _crawl_instagram_post(
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
-        context = await browser.new_context(user_agent="Mozilla/5.0...")
-        await context.add_cookies(
-            [
-                {
-                    "name": "sessionid",
-                    "value": session_id,
-                    "domain": ".instagram.com",
-                    "path": "/",
-                    "httpOnly": True,
-                    "secure": True,
-                }
-            ]
-        )
+        context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        if session_id:
+            await context.add_cookies(
+                [
+                    {
+                        "name": "sessionid",
+                        "value": session_id,
+                        "domain": ".instagram.com",
+                        "path": "/",
+                        "httpOnly": True,
+                        "secure": True,
+                    }
+                ]
+            )
         page = await context.new_page()
+        await stealth_async(page)
         crawl_result = await crawl_instagram_post(page, post_url)
         await browser.close()
         return crawl_result
@@ -102,11 +105,10 @@ async def _extract_instagram_items(crawl_result: dict) -> list[dict]:
             os.rename(old_path, new_path)
             downloaded_files.append(new_path)
 
-    ai_result = await asyncio.to_thread(
-        extract_fact_and_vibe,
-        downloaded_files,
-        crawl_result.get("caption", ""),
-        crawl_result.get("hashtags", []),
+    ai_result = await extract_fact_and_vibe(
+    downloaded_files,
+    crawl_result.get("caption", ""),
+    crawl_result.get("hashtags", []),
     )
     extracted_items = ai_result.get("extracted_items", [])
 
@@ -120,26 +122,38 @@ async def _extract_instagram_items(crawl_result: dict) -> list[dict]:
 
 async def _extract_product_items(post_url: str) -> list[dict]:
     data = await scrape_product_metadata(post_url)
-    if not data:
+    if not data or data.get("title") == "추출 실패":
         print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
         return []
 
+    #URL 정규화
     raw_image_url = data.get("image_url", "")
     normalized_image_url = html.unescape(raw_image_url.strip()) if isinstance(raw_image_url, str) else ""
     if normalized_image_url.startswith("//"):
         normalized_image_url = f"https:{normalized_image_url}"
 
-    local_image_url = ""
-    if normalized_image_url.startswith(("http://", "https://")):
-        downloaded_files = await download_images([normalized_image_url], str(IMAGE_DIR))
-        if downloaded_files:
-            local_image_url = os.path.basename(downloaded_files[0])
-            print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_image_url}")
-        else:
-            print(f"[백그라운드] 외부 상품 이미지 다운로드 실패, 원본 URL 유지: {normalized_image_url[:120]}")
+    async def fetch_image_task() -> str:
+        if normalized_image_url.startswith(("http://", "https://")):
+            files = await download_images([normalized_image_url], str(IMAGE_DIR))
+            if files:
+                local_name = os.path.basename(files[0])
+                print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_name}")
+                return local_name
+            print(f"[백그라운드] 이미지 다운로드 실패, 원본 URL 유지: {normalized_image_url[:120]}")
+        return ""
+    
+    async def parse_description_task() -> dict:
+        desc = data.get("description", "").strip()        
+        if not desc or len(desc) < 10 or desc.lower() == "no description available":
+            return {"recommend": "", "key_details": ""}
+            
+        return await analyze_description_with_gemini(desc)
 
-    description = data.get("description", "No description available")
-    ai_parsed_data = await analyze_description_with_gemini(description)
+    local_image_url, ai_parsed_data = await asyncio.gather(
+        fetch_image_task(),
+        parse_description_task()
+    )
+
     brand_info = data.get("brand", "")
     final_key_details = ai_parsed_data.get("key_details", "")
     if brand_info:
@@ -149,7 +163,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
         {
             "category": "PRODUCT",
             "title": data.get("title", "Unknown"),
-            "vibe_text": ai_parsed_data.get("vibe_text", "No description available"),
+            "recommend": ai_parsed_data.get("recommend", ""),
             "image_url": local_image_url or normalized_image_url,
             "facts": {
                 "title": data.get("title", ""),

@@ -9,8 +9,8 @@ import re
 from project.backend.app.core.settings import load_backend_env
 
 class ProductAnalysisResult(BaseModel):
-    vibe_text: str = Field(description="상품이 주는 감성, 무드, 분위기")
-    key_details: List[str] = Field(description="상품의 핵심 특징 리스트")
+    recommend: str = Field(description="어떤 아이템을 원하는 유저에게 추천하는지 설명하는 내용")
+    key_details: List[str] = Field(description="상품의 핵심 스펙, 소재, 핏 등 객관적인 특징 요약")
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -27,41 +27,35 @@ client = genai.Client(
 
 async def analyze_description_with_gemini(description: str) -> dict:
     if not description or description == "No description available":
-        return {"vibe_text": "No description available", "key_details": ""}
+        return {"recommend": "", "key_details": ""}
 
     prompt = f"""
-    다음 상품설명을 분석하여 'vibe_text'와'key_details'로 분리해.
-    반드시 아래 JSON 형식으로만 반환해. 마크다운 기호 없이 순수 JSON만 출력해.
-    
-    - vibe_text: 상품이 주는 감성, 무드, 분위기를 묘사하는 1~2문장
-    - key_details: 상품의 핵심 스펙, 소재, 핏 등 객관적인 특징 요약
+    다음 상품설명을 분석하여 'recommend'와'key_details'로 분리해.
 
     [상품 설명]
-    {description}
+    {description} """
 
-    [출력 형식]
-    {{
-        "vibe_text": "단순한 객관적 묘사가 아닌 아이템이 사용자의 욕구를 자극한 바로 그 '미세한 매력 포인트를 추론해 낼 것.(추론에 시 항상 근거를 생각해 검증할 것)
-        "key_details": "핵심 특징"
-    }}
-    """
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-1.5-flash",
             contents=prompt, 
             config=types.GenerateContentConfig(
-                tools=[{"google_search": {}}],  
+                response_mime_type="application/json",
+                response_schema=ProductAnalysisResult, 
                 temperature=0.1 
             )
         )
 
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_text)
+        data = response.parsed
+        
+        return {
+            "recommend": data.recommend,
+            "key_details": data.key_details
+        }
         
     except Exception as e:
-        print(f"Gemini API 에러: {e}")
-        # 실패 시에도 통일된 스키마 구조의 기본값 반환
+        print(f"Gemini 상품 설명 분석 에러: {e}")
         return {
-            "vibe_text": description[:50] + "...", 
-            "key_details": ["세부 정보 없음"],
+            "recommend": "", 
+            "key_details": description[:100].strip() + "..." if len(description) > 100 else description,
         }
