@@ -6,8 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
-
+import playwright_stealth
 from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
 from project.backend.Step1.shopping_crawler import scrape_product_metadata
@@ -88,7 +87,7 @@ async def _crawl_instagram_post(
                     ]
                 )
             page = await context.new_page()
-            await stealth_async(page)
+            await playwright_stealth.stealth_async(page)
             crawl_result = await crawl_instagram_post(page, post_url)
             return crawl_result
         finally:
