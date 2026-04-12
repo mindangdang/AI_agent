@@ -5,10 +5,9 @@ pillow
 requests
 python-dotenv
 psycopg[pool,binary]
-fastmcp
 pgvector==0.2.5
 fastapi
 beautifulsoup4
-httpx 
+httpx
 uvicorn[standard]
 supabase
