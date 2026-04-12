@@ -161,12 +161,8 @@ async def run_serpapi_search(payload: SearchRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {exc}") from exc
 
-class LensSearchRequest(BaseModel):
-    image_url: str = Field(..., description="Supabase 등에 업로드된 퍼블릭 이미지 URL")
-    page: int = 1
-
-@router.post("/rense")
-async def run_serpapi_lens_search(payload: LensSearchRequest):
+@router.post("/lens")
+async def run_serpapi_lens_search(payload: SearchRequest):
     serp_api_key = os.environ.get("SERP_API_KEY")
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
@@ -188,15 +184,18 @@ async def run_serpapi_lens_search(payload: LensSearchRequest):
         "empty.seoul.kr": "무신사 엠프티"
     }
 
+    image = await generate_image_from_query(payload.query)
+    search_image_url = await upload_generated_image(image)
+
     params = {
-        "engine": "google_lens",  # 구글 렌즈 엔진 사용
-        "url": payload.image_url, # 텍스트(q) 대신 이미지 URL 투입
+        "engine": "google_lens",  
+        "url": search_image_url, 
         "api_key": serp_api_key,
         "hl": "ko",
         "gl": "kr"
     }
 
-    print(f"SerpApi(Google Lens)로 디깅 시작: {payload.image_url}")
+    print(f"SerpApi(Google Lens)로 디깅 시작: {search_image_url}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

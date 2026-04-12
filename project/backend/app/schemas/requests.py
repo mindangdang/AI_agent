@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 
 
 class UrlAnalyzeRequest(BaseModel):
@@ -15,7 +15,6 @@ class TasteUpdate(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     page: Optional[int] = 1
-
 
 class FeedbackRequest(BaseModel):
     user_id: str | int

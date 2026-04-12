@@ -8,17 +8,18 @@ from project.backend.app.core.settings import load_backend_env
 from fastapi import HTTPException
 from supabase import create_client, Client
 
-GENERATION_MODEL = "imagen-3.0-generate-002"
+load_backend_env()
+
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
+BUCKET_NAME = "vibe-images"
 
 if not url or not key:
     raise ValueError("Supabase 환경 변수가 설정되지 않았습니다.")
 
-class VibeGenerateRequest(BaseModel):
-    prompt: str = Field(..., description="유저가 원하는 패션 아이템 (예: '연청 워시드 크롭 데님 자켓')")
+GENERATION_MODEL = "imagen-3.0-generate-002"
 
-load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
@@ -30,6 +31,10 @@ client = genai.Client(
         base_url=my_proxy_url
     )
 )
+
+class VibeGenerateRequest(BaseModel):
+    prompt: str = Field(..., description="유저가 원하는 패션 아이템 (예: '연청 워시드 크롭 데님 자켓')")
+
 async def generate_image_from_query(user_query: str) -> bytes:
 
     prompt = f"""
@@ -51,14 +56,14 @@ async def generate_image_from_query(user_query: str) -> bytes:
         )
         generated_image = generate_response.generated_images[0]
 
-        return generated_image
+        if not generated_image.image_bytes:
+            raise ValueError("생성된 이미지 데이터가 비어 있습니다.")
+            
+        return generated_image.image_bytes
 
     except Exception as e:
         print(f"이미지 생성 실패: {e}")
         raise HTTPException(status_code=500, detail="이미지 생성에 실패했습니다.")
-
-supabase: Client = create_client(url, key)
-BUCKET_NAME = "vibe-images"
 
 async def upload_generated_image(image_bytes: bytes) -> str:
 
