@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, Sparkles } from 'lucide-react';
+import { Search, Loader2, Sparkles, BrainCircuit, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -18,6 +18,8 @@ export function SearchTabContent({
   refreshTaste,
   user,
 }: SearchTabContentProps) {
+  const [searchMode, setSearchMode] = useState<"digging" | "ai">("digging");
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
@@ -39,7 +41,8 @@ export function SearchTabContent({
   const fetchResults = async (page: number, isAppend: boolean) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/pse', {
+      const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
@@ -63,6 +66,11 @@ export function SearchTabContent({
       } else {
         // 새 검색: 기존 결과를 싹 지우고 새 결과만 보여줌
         setSearchResults(data.results || []);
+        if (searchMode === "ai" && data.generated_vibe_image_url) {
+          setGeneratedImage(data.generated_vibe_image_url);
+        } else {
+          setGeneratedImage(null);
+        }
       }
     } catch (error: any) {
       console.error(error);
@@ -79,6 +87,7 @@ export function SearchTabContent({
     
     setCurrentPage(1);       // 1페이지로 리셋
     setSearchResults([]);    // 기존 화면 싹 지우기
+    setGeneratedImage(null);
     await fetchResults(1, false); // 1페이지 데이터 가져와서 덮어쓰기
   };
 
@@ -144,12 +153,49 @@ export function SearchTabContent({
           <h2 className="text-4xl font-black tracking-tighter uppercase">POSE! Search</h2>
           <p className="text-gray-500 font-medium">당신의 취향을 기반으로 구글에서 새로운 영감을 찾아냅니다.</p>
         </div>
-
+        <div className="flex justify-center mb-8">
+          <div className="bg-gray-100 p-1 rounded-full inline-flex relative shadow-inner">
+            <button
+              type="button"
+              onClick={() => setSearchMode("digging")}
+              className={`relative z-10 flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-colors ${
+                searchMode === "digging" ? "text-white" : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              <Zap className="w-4 h-4" /> 디깅 모드
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchMode("ai")}
+              className={`relative z-10 flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-colors ${
+                searchMode === "ai" ? "text-white" : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              <BrainCircuit className="w-4 h-4" /> AI 검색 모드
+            </button>
+            
+            {/* 토글 배경 애니메이션 */}
+            <motion.div
+              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full ${
+                searchMode === "ai" ? "bg-purple-600" : "bg-black"
+              }`}
+              initial={false}
+              animate={{
+                x: searchMode === "digging" ? "4px" : "100%",
+              }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            />
+          </div>
+        </div>
         <form onSubmit={handleSearch} className="relative group max-w-3xl mx-auto">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 w-6 h-6 transition-colors group-focus-within:text-black" />
           <input
             type="text"
-            placeholder="What are you looking for? (e.g., 빈티지한 조명)"
+            placeholder={
+              searchMode === "digging" 
+                ? "What are you looking for? (e.g., 워싱 디스트로이드 데님)"
+                : "머릿속 무드를 설명해주세요 (e.g., 연청 크롭 데님 트러커 자켓)"
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-16 pr-32 py-5 bg-white border-2 border-gray-100 rounded-[2rem] shadow-lg shadow-gray-100 focus:outline-none focus:border-black transition-all text-lg font-medium"
@@ -189,28 +235,50 @@ export function SearchTabContent({
                 Search Results
               </div>
             </div>
-
             {loading && searchResults.length === 0 ? (
-              <div className="flex justify-center py-12">
-                <p className="text-sm font-medium text-gray-400 animate-pulse flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" /> 구글에서 검색하는 중...
+              <div className="flex justify-center py-12 flex-col items-center gap-4">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                <p className="text-sm font-medium text-gray-500 animate-pulse text-center">
+                  {searchMode === "digging" 
+                    ? "디깅하는 중...." 
+                    : "AI가 디깅하는 중...\n(약 10~15초 소요)"}
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                <AnimatePresence>
-                  {searchResults.map((item, index) => {
-                    return (
-                      <SearchResultCard
-                        key={item.id}
-                        delay={index * 0.1}
-                        item={item}
-                        onClick={() => setSelectedItem(item)}
-                        onSave={handleSaveToFeed}
-                      />
-                    );
-                  })}
-                </AnimatePresence>
+              <div className="space-y-8">
+                {searchMode === "ai" && generatedImage && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm"
+                  >
+                    <span className="text-xs font-black tracking-widest uppercase text-purple-600 mb-4 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" /> Generated Vibe
+                    </span>
+                    <img 
+                      src={generatedImage} 
+                      alt="AI Generated Vibe" 
+                      className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
+                    />
+                    <p className="text-xs text-gray-400 mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                  </motion.div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <AnimatePresence>
+                    {searchResults.map((item, index) => {
+                      return (
+                        <SearchResultCard
+                          key={item.id}
+                          delay={index * 0.1}
+                          item={item}
+                          onClick={() => setSelectedItem(item)}
+                          onSave={handleSaveToFeed}
+                        />
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
               </div>
             )}
             {searchResults.length > 0 && (
@@ -229,7 +297,6 @@ export function SearchTabContent({
         )}
       </motion.div>
 
-      {/* 모달 렌더링 (카드를 클릭했을 때만 띄움) */}
       <ItemDetailDialog
         item={selectedItem}
         onOpenChange={(open) => !open && setSelectedItem(null)}
