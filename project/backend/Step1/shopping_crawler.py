@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from pydantic import BaseModel,Field
 from typing import Optional
-
+from playwright_stealth import Stealth
 from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright
@@ -106,45 +106,105 @@ def _extract_meta_content(soup: BeautifulSoup, property_name: str) -> str:
         
     return ""
 
+async def fallback_with_serpapi_google(url: str) -> dict:
+    print(f"[{url}] 악성 도메인 감지. SerpApi(Google Cache)로 우회합니다...")
+    serp_api_key = os.environ.get("SERP_API_KEY")
+    if not serp_api_key: return None
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get("https://serpapi.com/search", params={
+                "engine": "google", "q": url, "api_key": serp_api_key, "hl": "ko", "gl": "kr"
+            })
+            response.raise_for_status()
+            search_data = response.json()
+
+        organic_results = search_data.get("organic_results", [])
+        if not organic_results: return None
+
+        first_hit = organic_results[0]
+        title = first_hit.get("title", "").split(" | ")[0].split(" - ")[0]
+        price = ""
+        for ext in first_hit.get("rich_snippet", {}).get("top", {}).get("extensions", []):
+            if "₩" in ext or "원" in ext: price = ext; break
+
+        return {
+            "url": url, "title": title, "brand": "", "price": price,
+            "currency": "KRW", "image_url": first_hit.get("thumbnail", ""),
+            "description": first_hit.get("snippet", ""), "availability": "",
+            "source": "serpapi-google-cache"
+        }
+    except Exception as e:
+        print(f"SerpApi 캐시 폴백 실패: {e}")
+        return None
+
 async def _load_product_page(url: str) -> dict:
+
+    if any(domain in url for domain in ["kream.co.kr", "zara.com"]):
+        raise ValueError("Strict WAF Domain - Route to SerpApi")
+    
+    #헤더 변경
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
     }
     try:
-        # HTTP/2 활성화로 헤더 압축 및 다중화 이점 챙기기
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, http2=True) as client:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             html = response.text
-            final_url = str(response.url)
+            
+            # WAF가 챌린지 페이지(Cloudflare 등)를 반환했는지 검증
+            if "cf-browser-verification" in html or "Just a moment..." in html:
+                raise ValueError("WAF Challenge intercepted")
 
-            is_js_heavy = any(domain in url for domain in ["m.bunjang.co.kr", "musinsa.com", "kream.co.kr", "zara.com"])
-            # <script>는 모든 페이지에 있으므로 판단 기준에서 제외하고, 핵심 메타태그 유무로만 판단
+            is_js_heavy = any(domain in url for domain in ["m.bunjang.co.kr", "musinsa.com"])
             if is_js_heavy or ("og:title" not in html and "application/ld+json" not in html):
-                print(f"[{url}] JS 렌더링 필요. Playwright 가동...")
                 raise ValueError("Need JS rendering")
 
-            return {"html": html, "finalUrl": final_url}
+            return {"html": html, "finalUrl": str(response.url)}
             
-    except Exception:
-        # Fallback to Playwright
+    except Exception as e:
+        print(f"[{url}] HTTP 로드 실패({e}). Playwright Stealth 가동...")
+        
+        # 3. Playwright Stealth 모드 (Level 2 Bypass)
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-            context = await browser.new_context(user_agent=headers["User-Agent"])
+            browser = await p.chromium.launch(
+                headless=True, 
+                args=[
+                    "--no-sandbox", 
+                    "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled" # 웹드라이버 속성 제거
+                ]
+            )
+            # 여기서는 일반 유저의 최신 브라우저로 위장
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}
+            )
             page = await context.new_page()
-
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-            await page.wait_for_timeout(2500) # JS 프레임워크가 DOM을 조작할 시간 부여
             
-            html = await page.content()
-            final_url = page.url
-            await browser.close()
+            stealth = Stealth()
+            await stealth.apply_stealth_async(page)
+
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                await page.wait_for_timeout(2500) 
+                
+                html = await page.content()
+                final_url = page.url
+            finally:
+                await browser.close()
             
             return {"html": html, "finalUrl": final_url}
 
 async def scrape_product_metadata(url: str) -> dict:
     print(f"[{url}] 메타데이터 추출 파이프라인 시작...")
+
+    if any(domain in url for domain in ["kream.co.kr", "zara.com"]):
+        serp_data = await fallback_with_serpapi_google(url)
+        if serp_data: return serp_data
     
     final_url = url
     # 파이프라인 중간에 터져도 HTML을 살려서 폴백으로 넘기기 위해 최상단에 선언
@@ -253,8 +313,10 @@ async def scrape_product_metadata(url: str) -> dict:
             gemini_result = await fallback_with_gemini(url, html)
             if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
                 return gemini_result
-        else:
-            print(f"[{url}] 파싱할 HTML 소스가 없어 Gemini 폴백을 스킵합니다.")
+        
+        print(f"[{url}] 최후의 수단: SerpApi 캐시 탐색...")
+        serp_data = await fallback_with_serpapi_google(url)
+        if serp_data: return serp_data
 
         return {
             "url": url,
