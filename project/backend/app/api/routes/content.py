@@ -168,22 +168,6 @@ async def run_serpapi_lens_search(payload: SearchRequest):
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
 
     url = "https://serpapi.com/search"
-    domain_map = {
-        "musinsa.com": "무신사",
-        "kream.co.kr": "KREAM",
-        "fruitsfamily.com": "후루츠패밀리",
-        "kasina.co.kr": "카시나",
-        "heights-store.com": "하이츠스토어",
-        "8division.com": "에잇디비젼",
-        "worksout.co.kr": "웍스아웃",
-        "iamshop-online.com": "아이엠샵",
-        "samplas.co.kr": "샘플라스",
-        "etcseoul.com": "etcseoul",
-        "zara.com": "자라",
-        "fetching.co.kr": "페칭",
-        "empty.seoul.kr": "무신사 엠프티"
-    }
-
     image = await generate_image_from_query(payload.query)
     search_image_url = await upload_generated_image(image)
 
@@ -214,31 +198,20 @@ async def run_serpapi_lens_search(payload: SearchRequest):
             title = item.get("title", "상품명 없음")
             image_url = item.get("thumbnail", "")
             extracted_price = item.get("price", "가격 미상")
-            
-            is_valid_source = False
-            source_name = "알 수 없는 샵"
-            
-            for domain, name in domain_map.items():
-                if domain in link:
-                    is_valid_source = True
-                    source_name = name
-                    break
-
-            if not is_valid_source:
-                continue
+            source = item.get("source", "알 수 없는 샵")
 
             results.append(
                 {
                     "id": str(uuid.uuid4()),
                     "category": "PRODUCT",
-                    "recommend": f"{source_name}에서 발견한 힙한 아이템",
+                    "recommend": f"{source}에서 발견한 힙한 아이템",
                     "image_url": image_url,
                     "url": link,
                     "summary_text": title,
                     "facts": {
                         "title": title,
                         "Price": extracted_price,
-                        "Shop": source_name,
+                        "Shop": source,
                     },
                 }
             )
