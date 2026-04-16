@@ -59,10 +59,10 @@ type RecentInspirationsGridProps = {
 };
 
 const tasteSectionAccents = [
-  'from-purple-500/15 via-pink-500/10 to-transparent border-purple-200/70',
-  'from-blue-500/15 via-cyan-500/10 to-transparent border-blue-200/70',
-  'from-yellow-400/20 via-orange-400/10 to-transparent border-yellow-200/70',
-  'from-emerald-500/15 via-teal-500/10 to-transparent border-emerald-200/70',
+  'from-sky-500/8 via-blue-500/4 to-transparent border-sky-100',
+  'from-blue-500/8 via-cyan-500/4 to-transparent border-blue-100',
+  'from-indigo-500/8 via-sky-500/4 to-transparent border-indigo-100',
+  'from-cyan-500/8 via-teal-500/4 to-transparent border-cyan-100',
 ];
 
 function normalizeTasteValue(value: unknown): string[] {
@@ -253,27 +253,19 @@ function ProfileHeader({ user }: ProfileHeaderProps) {
   );
 }
 
-function TasteAnalysisHeader(_: TasteAnalysisHeaderProps) {
-  return (
-    <div className="lg:col-span-4 space-y-6">
-      <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-blue-600">
-        <Zap className="w-3.5 h-3.5" fill="currentColor" />
-        Taste Analysis
-      </div>
-      <h3 className="text-3xl font-black tracking-tighter leading-none uppercase">
-        The Patterns
-        <br />
-        of your
-        <br />
-        Choices.
-      </h3>
-      <div className="h-2 w-12 bg-black rounded-full" />
-    </div>
-  );
-}
 
 function TasteSectionCard({ section }: TasteSectionCardProps) {
   const paragraphs = parseTasteBodyParagraphs(section.body);
+  const [openParagraphs, setOpenParagraphs] = useState<Record<number, boolean>>(
+    Object.fromEntries(paragraphs.map((_, index) => [index, true])),
+  );
+
+  const toggleParagraph = (index: number) => {
+    setOpenParagraphs((current) => ({
+      ...current,
+      [index]: !current[index],
+    }));
+  };
 
   return (
     <div className={`rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 backdrop-blur-sm`}>
@@ -283,22 +275,28 @@ function TasteSectionCard({ section }: TasteSectionCardProps) {
             {section.title}
           </h5>
         </div>
-        <Compass className="h-5 w-5 text-gray-400" />
+        <Compass className="h-5 w-5 text-blue-200" />
       </div>
       <div className="mt-5 space-y-3">
         {paragraphs.map((paragraph, lineIndex) => (
           <div
             key={`${section.title}-${lineIndex}`}
-            className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm shadow-black/5"
+            className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm shadow-slate-950/5"
           >
             {paragraph.title ? (
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
-                {paragraph.title}
+              <button
+                type="button"
+                onClick={() => toggleParagraph(lineIndex)}
+                className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-100 via-blue-100 to-cyan-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-blue-600 transition-all hover:brightness-95"
+              >
+                #{paragraph.title}
+              </button>
+            ) : null}
+            {openParagraphs[lineIndex] !== false ? (
+              <p className="mt-3 text-sm font-medium leading-6 text-gray-700">
+                {paragraph.description}
               </p>
             ) : null}
-            <p className="mt-2 text-sm font-medium leading-6 text-gray-700">
-              {paragraph.description}
-            </p>
           </div>
         ))}
       </div>
@@ -315,20 +313,22 @@ function TasteSummaryCard({
   user,
 }: TasteSummaryCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-[3rem] border border-black/5 bg-white shadow-[0_30px_80px_-40px_rgba(0,0,0,0.35)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(135deg,_rgba(250,250,250,0.96),_rgba(244,244,245,0.98))]" />
+    <div className="relative overflow-hidden rounded-[3rem] border border-slate-100 bg-white shadow-[0_30px_80px_-40px_rgba(15,23,42,0.14)]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.08),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.07),_transparent_24%),linear-gradient(180deg,_rgba(255,255,255,0.99),_rgba(248,250,252,0.98))]" />
       <div className="relative p-8 md:p-10 space-y-8">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 backdrop-blur">
-              <Heart className="h-3.5 w-3.5 text-pink-500" fill="currentColor" />
-              Signature Taste
+            <span className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-blue-600">
+              <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-blue-600">
+                <Zap className="w-3.5 h-3.5" fill="currentColor" />
+                Taste Analysis
+              </div>
             </span>
             <div>
               <h4 className="text-3xl md:text-4xl font-black tracking-tighter text-black">
                 {user?.username || 'Anonymous'}님의 취향 한 장 요약
               </h4>
-              <p className="mt-2 text-sm md:text-base font-medium text-gray-500">
+              <p className="mt-2 text-sm md:text-base font-medium text-slate-500">
                 AI가 모아본 취향의 결, 좋아하는 무드, 다시 찾게 될 영감 포인트예요.
               </p>
             </div>
@@ -344,30 +344,30 @@ function TasteSummaryCard({
           ))}
         </div>
 
-        <div className="rounded-[2rem] border border-dashed border-black/10 bg-white/70 p-5 text-sm font-medium leading-7 text-gray-600">
-          <span className="mr-2 inline-flex rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-white">
+        <div className="rounded-[2rem] border border-dashed border-sky-100 bg-white p-5 text-sm font-medium leading-7 text-slate-600">
+          <span className="mr-2 inline-flex rounded-full bg-sky-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-white">
             Share Tip
           </span>
           공유 버튼을 누르면 프로필 문구를 먼저 클립보드에 복사한 뒤, 인스타그램으로 이동할 수 있게 도와드려요.
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200/80 pt-6">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-6">
           <button
             onClick={onGenerateTaste}
             disabled={isGeneratingTaste}
-            className="flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-black shadow-sm transition-all hover:bg-gray-100"
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-900 shadow-sm transition-all hover:bg-slate-50"
           >
             {isGeneratingTaste ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 text-blue-500" />
             )}
             {isGeneratingTaste ? 'Analyzing...' : 'Re-Analyze'}
           </button>
           <button
             onClick={onShareProfile}
             disabled={isSharingProfile}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-purple-500/30 transition-all hover:from-purple-700 hover:to-blue-700"
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-500/20 transition-all hover:from-sky-600 hover:to-blue-700"
           >
             {isSharingProfile ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -572,8 +572,6 @@ export function ProfileTabContent({
       <ProfileHeader user={user} />
 
       <div className="flex gap-10 flex-col">
-        <TasteAnalysisHeader user={user} />
-
         <div className="lg:col-span-8">
           {taste
             ? (
