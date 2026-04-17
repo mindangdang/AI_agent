@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 
+import { getItemTitle } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
 
 type SearchResultCardProps = {
@@ -15,8 +16,7 @@ export function SearchResultCard({
   onClick,
   onSave,
 }: SearchResultCardProps) {
-  const factsObj = typeof item.facts === 'string' ? JSON.parse(item.facts) : item.facts;
-  const title = factsObj?.title || item.summary_text || '제목 없음';
+  const title = getItemTitle(item);
 
   return (
     <motion.div

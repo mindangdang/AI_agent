@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Trash2, Instagram, Sparkles } from 'lucide-react';
 
+import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
 
 type FeedItemCardProps = {
@@ -16,6 +17,9 @@ export function FeedItemCard({
   onDelete,
   onSelect,
 }: FeedItemCardProps) {
+  const facts = parseItemFacts(item);
+  const title = getItemTitle(item);
+
   return (
     <motion.div
       layout
@@ -49,13 +53,13 @@ export function FeedItemCard({
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
-        <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{item.recommend}</p>
+        <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{title}</p>
 
-        {item.facts && typeof item.facts === 'object' && (
+        {facts && (
           <>
-            {Object.entries(item.facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
+            {Object.entries(facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
               <div className="space-y-1.5 mt-3 border-t border-gray-100 pt-3">
-                {Object.entries(item.facts)
+                {Object.entries(facts)
                   .filter(([key]) => factKeysToShow.includes(key.toLowerCase()))
                   .map(([key, value]) => (
                     <div key={key} className="flex flex-col gap-0.5">
