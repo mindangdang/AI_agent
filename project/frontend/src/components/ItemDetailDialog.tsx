@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Instagram, X, Zap } from 'lucide-react';
 
+import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
 
 type ItemDetailDialogProps = {
@@ -9,29 +10,13 @@ type ItemDetailDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-function parseFacts(item: SavedItem) {
-  if (!item.facts) return null;
-  if (typeof item.facts === 'string') {
-    try {
-      return JSON.parse(item.facts);
-    } catch {
-      return null;
-    }
-  }
-  return item.facts;
-}
-
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
   if (!item) {
     return null;
   }
 
-  const facts = parseFacts(item);
-  const modalTitle =
-    (facts && typeof facts === 'object' && 'title' in facts && typeof facts.title === 'string' && facts.title) ||
-    (facts && typeof facts === 'object' && 'Title' in facts && typeof facts.Title === 'string' && facts.Title) ||
-    item.summary_text ||
-    item.recommend;
+  const facts = parseItemFacts(item);
+  const modalTitle = getItemTitle(item);
   const factEntries =
     facts && typeof facts === 'object'
       ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
