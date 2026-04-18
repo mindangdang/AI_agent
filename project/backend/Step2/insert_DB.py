@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types
 from psycopg.types.json import Json
 from project.backend.app.core.settings import load_backend_env
+from project.backend.app.core.resilience import with_llm_resilience
 
 # 환경변수 세팅 
 load_backend_env()
@@ -26,27 +27,21 @@ client = genai.Client(
 )
 MODEL_NAME = "gemini-embedding-2-preview" 
 
+@with_llm_resilience(fallback_default={})
 async def get_vibe_vectors_batch(texts: list[str]) -> dict:
     # 빈 문자열이나 None은 걸러내고 유효한 텍스트만 추출
     valid_texts = [t for t in texts if t and t.strip()]
     if not valid_texts:
         return {}
 
-    try:
-        print(f"{len(valid_texts)}개의 바이브 텍스트를 한 번에 임베딩합니다...")
-        # 네이티브 비동기 클라이언트로 직접 호출!
-        response = await client.aio.models.embed_content(
-            model=MODEL_NAME,
-            contents=valid_texts, 
-            config=types.EmbedContentConfig(output_dimensionality=768)
-        )
-        
-        # 반환된 임베딩 결과를 원본 텍스트와 매핑하여 딕셔너리로 만듦
-        return {text: emb.values for text, emb in zip(valid_texts, response.embeddings)}
-        
-    except Exception as e:
-        print(f"임베딩 일괄 생성 실패: {e}")
-        return {}
+    print(f"{len(valid_texts)}개의 바이브 텍스트를 한 번에 임베딩합니다...")
+    response = await client.aio.models.embed_content(
+        model=MODEL_NAME,
+        contents=valid_texts, 
+        config=types.EmbedContentConfig(output_dimensionality=768)
+    )
+    
+    return {text: emb.values for text, emb in zip(valid_texts, response.embeddings)}
 
 # ==========================================
 # 2. 비동기 일괄 DB Insert 함수
