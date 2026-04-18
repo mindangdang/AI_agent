@@ -38,7 +38,15 @@ class VibeGenerateRequest(BaseModel):
 async def generate_image_from_query(user_query: str) -> bytes:
 
     prompt = f"""
-    generate isolated fashion product shot of {user_query}, plain white background, no human, no mannequin.
+    [Image Generation Prompt Template]
+    devide {user_query} into 4 key dimensions: category, details, color, mood. Then generate a detailed image generation prompt for a high-end contemporary designer brand's editorial product photography of the item described in user query.
+    Strictly follow the structure and instructions below to create the prompt. Do not omit any dimension
+    High-end contemporary designer brand's editorial product photography of (category).
+    Design features: (details).
+    Aesthetic: Archive fashion, avant-garde streetwear, minimalist and sophisticated silhouette, trendy mood.
+    Color & Texture: (color) (If not specified, use muted, neutral, and monochromatic tones). Premium realistic material texture, highly detailed.
+    Lighting & Camera: Shot on medium format camera, 85mm lens, studio softbox lighting, soft diffused shadows.
+    Setting: Isolated on a clean off-white background, strictly no human, no mannequin, no floating elements. 8k resolution, ultra-photorealistic, minimalist e-commerce catalog style.
     """
     
     generate_response = await client.aio.models.generate_content(
