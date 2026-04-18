@@ -3,6 +3,7 @@ from google import genai
 import os
 from google.genai import types
 from project.backend.app.core.settings import load_backend_env
+from project.backend.app.core.resilience import with_llm_resilience
 
 
 load_backend_env()
@@ -18,6 +19,7 @@ client = genai.Client(
     )
 )
 
+@with_llm_resilience(fallback_default=lambda user_query: {"final_query": user_query})
 async def optimize_query_with_llm(user_query: str):
 
     prompt = f"""
@@ -52,21 +54,13 @@ async def optimize_query_with_llm(user_query: str):
     현재 입력된 유저의 쿼리: {user_query}
     """
 
-    try:
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1 
-            )
+    response = await client.aio.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.1 
         )
-
-        extended_query = json.loads(response.text)
-        return extended_query
-
-    except Exception as e:
-        print(f"LLM 최적화 실패: {e}")
-        return {
-            "final_query": user_query,
-        }
+    )
+    
+    return json.loads(response.text)

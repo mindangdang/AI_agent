@@ -7,6 +7,7 @@ from PIL import Image
 from google import genai
 from google.genai import types
 from project.backend.app.core.settings import load_backend_env
+from project.backend.app.core.resilience import with_llm_resilience
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -31,6 +32,7 @@ async def fetch_image(url: str, client: httpx.AsyncClient) -> Image.Image | None
     except Exception:
         return None
 
+@with_llm_resilience(fallback_default=lambda user_vibe_text, search_results: search_results)
 async def rerank_with_gemini_embedding(user_vibe_text: str, search_results: list[dict]) -> list[dict]:
     """검색 결과를 Gemini Embedding을 사용해 이미지 무드 기반으로 재정렬"""
     if not search_results:
@@ -59,27 +61,20 @@ async def rerank_with_gemini_embedding(user_vibe_text: str, search_results: list
     print("🧠 [Gemini Embedding] 텍스트 및 이미지 벡터화 및 유사도 계산 중...")
 
     # 3. 유저 텍스트 임베딩 추출
-    try:
-        text_response = await client.aio.models.embed_content(
-            model=MODEL_NAME,
-            contents=user_vibe_text,
-        )
-        text_embeds = np.array([text_response.embeddings[0].values])
-    except Exception as e:
-        print(f"텍스트 임베딩 실패: {e}")
-        return search_results
+    text_response = await client.aio.models.embed_content(
+        model=MODEL_NAME,
+        contents=user_vibe_text,
+    )
+    text_embeds = np.array([text_response.embeddings[0].values])
 
     # 4. 이미지 임베딩 병렬 추출
+    @with_llm_resilience(fallback_default=None)
     async def embed_image(img):
-        try:
-            res = await client.aio.models.embed_content(
-                model=MODEL_NAME,
-                contents=img,
-            )
-            return res.embeddings[0].values
-        except Exception as e:
-            print(f"이미지 임베딩 에러: {e}")
-            return None
+        res = await client.aio.models.embed_content(
+            model=MODEL_NAME,
+            contents=img,
+        )
+        return res.embeddings[0].values
 
     embed_tasks = [embed_image(img) for img in batch_images]
     image_embeds_results = await asyncio.gather(*embed_tasks)

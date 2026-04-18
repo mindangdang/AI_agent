@@ -9,6 +9,7 @@ from project.backend.app.core.settings import load_backend_env
 # 제미나이 SDK
 from google import genai
 from google.genai import types
+from project.backend.app.core.resilience import with_llm_resilience
 
 
 # ---------------------------------------------------------
@@ -53,6 +54,7 @@ class InstaAnalysisResult(BaseModel):
 # 3. Gemini 분석 엔진 & 멀티모달 파이프라인
 # ---------------------------------------------------------
 
+@with_llm_resilience(fallback_default={"extracted_items": []})
 async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     def load_images():
         loaded_imgs = []
@@ -91,7 +93,7 @@ async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: 
 
     contents = [prompt_ocr] + images + [text_input]
 
-    response_ocr = await client.models.generate_content(
+    response_ocr = await client.aio.models.generate_content(
         model="gemini-2.5-pro",
         contents=contents,
         config=types.GenerateContentConfig(

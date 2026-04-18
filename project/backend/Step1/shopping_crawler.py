@@ -11,6 +11,7 @@ from playwright_stealth import Stealth
 from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright
+from project.backend.app.core.resilience import with_llm_resilience
 
 # ---안전한 데이터 파싱을 위한 Pydantic 스키마 ---
 class ProductFallbackSchema(BaseModel):
@@ -23,47 +24,41 @@ class ProductFallbackSchema(BaseModel):
     brand: str = Field(default="", description="상품의 브랜드 이름")
     description: str = Field(default="", description="상품의 상세 설명 요약")
 
+@with_llm_resilience(fallback_default=None)
 async def fallback_with_gemini(url: str, html_content: str):
-    try:
-        client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-        truncated_html = html_content[:50000]
+    client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+    truncated_html = html_content[:50000]
 
-        prompt = f"""
-        Extract accurate product information from the provided HTML source of {url}.
-        If a value cannot be found, leave it empty. DO NOT guess.
-        
-        [HTML SOURCE]
-        {truncated_html}
-        """
-
-        print(f"[{url}] Gemini HTML 기반 폴백 분석 시작...")
-        
-        response = await client.aio.models.generate_content(
-            model='gemini-2.5-pro', 
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=ProductFallbackSchema, # Pydantic 스키마 강제
-                temperature=0.0 
-            )
+    prompt = f"""
+    Extract accurate product information from the provided HTML source of {url}.
+    If a value cannot be found, leave it empty. DO NOT guess.
+    
+    [HTML SOURCE]
+    {truncated_html}
+    """
+    print(f"[{url}] Gemini HTML 기반 폴백 분석 시작...")
+    
+    response = await client.aio.models.generate_content(
+        model='gemini-2.5-pro', 
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ProductFallbackSchema, # Pydantic 스키마 강제
+            temperature=0.0 
         )
-
-        data = response.parsed
-        
-        return {
-            "url": url,
-            "title": data.title,
-            "brand": data.brand,
-            "price": data.price,
-            "currency": data.currency,
-            "image_url": data.image_url,
-            "description": data.description,
-            "source": "gemini-html-fallback" 
-        }
-        
-    except Exception as e:
-        print(f"Gemini 폴백 파싱 실패: {e}")
-        return None
+    )
+    data = response.parsed
+    
+    return {
+        "url": url,
+        "title": data.title,
+        "brand": data.brand,
+        "price": data.price,
+        "currency": data.currency,
+        "image_url": data.image_url,
+        "description": data.description,
+        "source": "gemini-html-fallback" 
+    }
 
 # -----------------------------------
 WHITESPACE_PATTERN = re.compile(r'\s+')

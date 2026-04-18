@@ -7,6 +7,7 @@ from pydantic import BaseModel,Field
 from project.backend.app.core.settings import load_backend_env
 from fastapi import HTTPException
 from supabase import create_client, Client
+from project.backend.app.core.resilience import with_llm_resilience
 
 load_backend_env()
 
@@ -33,38 +34,31 @@ client = genai.Client(
 class VibeGenerateRequest(BaseModel):
     prompt: str = Field(..., description="유저가 원하는 패션 아이템 (예: '연청 워시드 크롭 데님 자켓')")
 
+@with_llm_resilience(fallback_default=HTTPException(status_code=500, detail="이미지 생성에 실패했습니다."))
 async def generate_image_from_query(user_query: str) -> bytes:
 
     prompt = f"""
     generate isolated fashion product shot of {user_query}, plain white background, no human, no mannequin.
     """
     
-    try:
-        generate_response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"], # "나 텍스트 말고 이미지로 줘!" 라고 강제함
-                image_config=types.ImageConfig(
-                    aspect_ratio="3:4" # 룩북 감성의 비율 유지
-                )
-            )
+    generate_response = await client.aio.models.generate_content(
+        model="gemini-2.5-flash-image",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
+            image_config=types.ImageConfig(aspect_ratio="3:4")
         )
-        part = generate_response.candidates[0].content.parts[0]
+    )
+    part = generate_response.candidates[0].content.parts[0]
+    
+    if getattr(part, 'inline_data', None) and part.inline_data.data:
+        return part.inline_data.data
+    elif getattr(part, 'image', None) and part.image.image_bytes:
+        return part.image.image_bytes
+    elif getattr(part, 'image_bytes', None):
+        return part.image_bytes
         
-        # 구글 SDK 응답 구조에 따라 바이트 데이터가 들어있는 위치를 찾아 반환
-        if getattr(part, 'inline_data', None) and part.inline_data.data:
-            return part.inline_data.data
-        elif getattr(part, 'image', None) and part.image.image_bytes:
-            return part.image.image_bytes
-        elif getattr(part, 'image_bytes', None):
-            return part.image_bytes
-            
-        raise ValueError("생성된 이미지 데이터를 찾을 수 없습니다.")
-
-    except Exception as e:
-        print(f"이미지 생성 실패: {e}")
-        raise HTTPException(status_code=500, detail="이미지 생성에 실패했습니다.")
+    raise ValueError("생성된 이미지 데이터를 찾을 수 없습니다.")
 
 async def upload_generated_image(image_bytes: bytes) -> str:
 
