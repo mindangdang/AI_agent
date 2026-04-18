@@ -10,8 +10,8 @@ from project.backend.app.core.settings import load_backend_env
 from project.backend.app.core.resilience import with_llm_resilience
 
 class ProductAnalysisResult(BaseModel):
-    recommend: str = Field(description="어떤 아이템을 원하는 유저에게 추천하는지 설명하는 내용")
-    key_details: List[str] = Field(description="상품의 핵심 스펙, 소재, 핏 등 객관적인 특징 요약")
+    recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
+    key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
