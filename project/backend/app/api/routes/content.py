@@ -241,26 +241,22 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
     print(f"SerpApi로 쏘는 쿼리: {extended_query}")
     print(f"[Multisearch] 파일 업로드 방식 검색 시작...")
     
-    # 프론트에서 받은 파일의 바이너리 데이터를 메모리로 읽음
     image_bytes = await image.read()
-    
-    # 2. SerpApi POST 파라미터 세팅
-    # 파일을 직접 보낼 때는 'url' 대신 멀티파트 'image' 필드를 사용하며 GET이 아닌 POST로 요청합니다.
+    search_image_url = await upload_generated_image(image_bytes)
+
     params = {
         "engine": "google_lens",
         "q": extended_query,
+        "url": search_image_url,
+        "tbm": "isch", 
         "type": "visual_matches",
         "api_key": serp_api_key,
-        "hl": "ko", "country": "kr"
-    }
-    
-    files = {
-        "image": (image.filename, image_bytes, image.content_type)
+        "hl": "ko", "gl": "kr"
     }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, params=params, files=files)
+            response = await client.get(url, params=params)
             if response.status_code != 200:
                 print(f"SerpApi 에러 내용: {response.text}")
             response.raise_for_status()
