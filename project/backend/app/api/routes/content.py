@@ -4,8 +4,7 @@ import uuid
 import asyncio
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, Form
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
@@ -190,6 +189,78 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, params=params)
+            if response.status_code != 200:
+                print(f"SerpApi 에러 내용: {response.text}")
+            response.raise_for_status()
+            search_data = response.json()
+
+        items = search_data.get("visual_matches", [])
+        print(f"구글 렌즈가 가져온 전체 원본 데이터 개수: {len(items)}")
+
+        results = []
+        for item in items:
+            link = item.get("link", "")
+            title = item.get("title", "상품명 없음")
+            image_url = item.get("thumbnail", "")
+            extracted_price = item.get("price", "가격 미상")
+            source = item.get("source", "알 수 없는 샵")
+
+            results.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "category": "PRODUCT",
+                    "recommend": f"{source}에서 발견한 힙한 아이템",
+                    "image_url": image_url,
+                    "url": link,
+                    "summary_text": title,
+                    "facts": {
+                        "title": title,
+                        "Price": extracted_price,
+                        "Shop": source,
+                    },
+                }
+            )
+
+        print(f" 통과한 최종결과 개수: {len(results)}")
+        return {"success": True, "results": results}
+        
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
+
+@router.post("/multimodal")
+async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = Form(...)):  
+
+    serp_api_key = os.environ.get("SERP_API_KEY")
+    if not serp_api_key:
+        raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
+    
+    url = "https://serpapi.com/search"
+    extended_query = await optimize_query_with_llm(user_text)
+    extended_query = extended_query.get('final_query', user_text)
+    print(f"SerpApi로 쏘는 쿼리: {extended_query}")
+    print(f"[Multisearch] 파일 업로드 방식 검색 시작...")
+    
+    # 프론트에서 받은 파일의 바이너리 데이터를 메모리로 읽음
+    image_bytes = await image.read()
+    
+    # 2. SerpApi POST 파라미터 세팅
+    # 파일을 직접 보낼 때는 'url' 대신 멀티파트 'image' 필드를 사용하며 GET이 아닌 POST로 요청합니다.
+    params = {
+        "engine": "google_lens",
+        "q": extended_query,
+        "type": "visual_matches",
+        "api_key": serp_api_key,
+        "hl": "ko", "country": "kr"
+    }
+    
+    files = {
+        "image": (image.filename, image_bytes, image.content_type)
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, params=params, files=files)
             if response.status_code != 200:
                 print(f"SerpApi 에러 내용: {response.text}")
             response.raise_for_status()
