@@ -5,60 +5,42 @@ from PIL import Image
 from google import genai
 from project.backend.app.core.settings import load_backend_env
 from google.genai import types
+import torch
+import numpy as np
+from PIL import Image
+from transformers import CLIPProcessor, CLIPModel
 
-load_backend_env()
-api_key = os.environ.get("GOOGLE_API_KEY")
+# ==========================================
+# 1. Fashion-CLIP 모델 초기화
+# ==========================================
+model_id = "patrickjohncyh/fashion-clip"
+print(f"🔄 [{model_id}] 모델 및 프로세서 로드 중 (초기 다운로드에 시간이 소요될 수 있습니다)...")
+processor = CLIPProcessor.from_pretrained(model_id)
+model = CLIPModel.from_pretrained(model_id)
 
-if not api_key:
-    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+# 연산 장치 설정 (가능한 경우 GPU 사용)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
+model.eval()
 
-# 구글 API 클라이언트 초기화
-my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
-client = genai.Client(
-    api_key=api_key,
-    http_options=types.HttpOptions(
-        base_url=my_proxy_url
-    )
-)
+def calculate_cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
+    v1, v2 = np.array(vec1), np.array(vec2)
+    return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 
-async def score_image_aesthetics(image_path: str, centroid_text: str) -> dict:
-    """Vision LLM을 사용하여 이미지의 미학적 부합도를 0~100점으로 직접 채점합니다."""
-    
-    system_prompt = f"""
-    당신은 하이엔드 패션 매거진의 수석 에디터입니다.
-    유저의 핵심 취향(Aesthetic Centroid)은 다음과 같습니다: [{centroid_text}]
-    
-    제공된 이미지를 분석하여, 위 취향과의 시각적/형태학적 일치도를 0에서 100 사이의 점수로 평가하십시오.
-    
-    [평가 기준]
-    1. 아이템의 종류(신발, 바지, 자켓 등)는 감점 요인이 아닙니다. 오직 '무드', '질감', '실루엣', '디테일'이 취향 텍스트와 일치하는지만 봅니다.
-    2. 양산형 패션, 지나치게 깔끔하고 매끄러운 핏, 뻔한 디자인은 엄격하게 감점하십시오.
-    
-    반드시 다음 JSON 구조로만 반환하십시오.
-    {{"score": 85}}
-    """
-    
-    img = Image.open(image_path)
-    
-    try:
-        res = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[img, "이 상품의 미학적 점수를 평가해."],
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                temperature=0.1
-            )
-        )
-        # JSON 파싱하여 반환 (실제 구현 시 pydantic 스키마 사용 권장)
-        import json
-        return json.loads(res.text)
-    except Exception as e:
-        print(f"채점 에러: {e}")
-        return {"score": 0}
+async def get_embedding(content) -> list[float]:
+    if isinstance(content, str):
+        inputs = processor(text=content, return_tensors="pt", padding=True, truncation=True).to(device)
+        with torch.no_grad():
+            features = model.get_text_features(**inputs)
+    else:
+        inputs = processor(images=content, return_tensors="pt").to(device)
+        with torch.no_grad():
+            features = model.get_image_features(**inputs)
+    return features.pooler_output.cpu().numpy().tolist()[0]
 
 async def run_similarity_poc():
-
+    centroid_text = "스트릿,엘레강스,빈티지,섹시한,유니크한,차분한 색감,슬림한"
+    text_vector = await get_embedding(centroid_text)
     test_images = {
         # [Match Group] 취향에 부합하는 그룹
         "Match 1 (나이키 샥스 오렌지)": "project/backend/insta_vibes/1fbe38c616db4a0ebffb8791932031a6.jpg",
@@ -77,14 +59,14 @@ async def run_similarity_poc():
     }
 
     results = []
-    center_text = "vintage elegant streetwear, avant-garde aesthetic, slim form-fitting silhouette, asymmetric design, sheer or cut-out details, muted neutral color palette"
-
+    print("\n[이미지 분석] 각 이미지 벡터와 텍스트 벡터 간 유사도 계산 시작...")
+    
     for label, path in test_images.items():
         try:
-
-            score = await score_image_aesthetics(path, center_text) 
-            results.append({"score": score.get("score", 0)})
-            print(f"{label}: {score.get('score', 0)}")
+            img = Image.open(path).convert("RGB")
+            img_vector = await get_embedding(img)
+            score = calculate_cosine_similarity(text_vector, img_vector)
+            results.append({"label": label, "score": score})
         except Exception as e:
             print(f"에러 발생 ({label}): {e}")
 
@@ -97,7 +79,7 @@ async def run_similarity_poc():
     print("\n[POC 연산 결과 리포트]")
     print("-" * 50)
     for rank, item in enumerate(results, 1):
-        print(f"{rank}위 | {item['score']:.4f}")
+        print(f"{rank}위 | {item['score']:.4f} | {item['label']}")
     print("-" * 50)
 
 if __name__ == "__main__":
