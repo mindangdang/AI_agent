@@ -12,3 +12,5 @@ httpx
 uvicorn[standard]
 supabase
 python-multipart
+torch
+transformers
