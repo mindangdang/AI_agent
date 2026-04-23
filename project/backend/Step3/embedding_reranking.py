@@ -1,7 +1,6 @@
 import os
 import torch
 import torch.nn.functional as F
-import numpy as np
 import gc
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
@@ -14,13 +13,13 @@ class FashionReRankingPipelineLight:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.lambda_weight = lambda_weight
         
-        print("🔄 Fashion-CLIP 모델 로드 중 (단일 모델 적재)...")
+        print("Fashion-CLIP 모델 로드 중 (단일 모델 적재)...")
         self.model_id = "patrickjohncyh/fashion-clip"
         self.processor = CLIPProcessor.from_pretrained(self.model_id)
         self.model = CLIPModel.from_pretrained(self.model_id).to(self.device)
         self.model.eval()
         
-        print(f"✅ 시스템 초기화 완료. (동작 환경: {self.device})")
+        print(f"시스템 초기화 완료. (동작 환경: {self.device})")
 
     def preprocess_image(self, image_path: str) -> Image:
         """배경 제거 없이 이미지 포맷만 RGB로 일관되게 정규화합니다."""
@@ -54,7 +53,7 @@ class FashionReRankingPipelineLight:
     @torch.no_grad()
     def build_user_taste_vector(self, wishlist_items: list[dict]) -> torch.Tensor:
         """위시리스트 배열에서 SVD(PCA)를 통해 지배적인 미학 축(Taste Vector) 추출"""
-        print("🧠 위시리스트 취향 벡터 합성(PCA) 중...")
+        print("위시리스트 취향 벡터 합성(PCA) 중...")
         vibe_vectors = []
         for item in wishlist_items:
             vec = self.get_pure_vibe_vector(item["image_path"], item["category"])
@@ -79,7 +78,7 @@ class FashionReRankingPipelineLight:
 
     def rerank_search_results(self, search_results: list[dict], user_taste_vector: torch.Tensor) -> list[dict]:
         """추출된 취향 벡터와 매물 간의 유사도 정렬 (메모리 세이프 모드)"""
-        print(f"🔍 {len(search_results)}개 상품 리랭킹 연산 시작...")
+        print(f"{len(search_results)}개 상품 리랭킹 연산 시작...")
         
         for item in search_results:
             try:
@@ -91,7 +90,7 @@ class FashionReRankingPipelineLight:
                 del item_vibe_vector
                 
             except Exception as e:
-                print(f"⚠️ {item.get('title', 'Unknown')} 처리 에러: {e}")
+                print(f"{item.get('title', 'Unknown')} 처리 에러: {e}")
                 item["aesthetic_score"] = -1.0
             
             finally:
