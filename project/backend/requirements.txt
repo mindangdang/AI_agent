@@ -14,4 +14,4 @@ supabase
 python-multipart
 torch
 transformers
-rembg
+
