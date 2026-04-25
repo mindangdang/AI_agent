@@ -74,8 +74,10 @@ async def run_serpapi_search(payload: SearchRequest):
     domain_map = {
         "musinsa.com": "무신사",
         "kream.co.kr": "KREAM",
+        "m.bunjang.co.kr" : "번개장터",
         "fruitsfamily.com": "후루츠패밀리",
-        "zara.com": "자라"
+        "zara.com": "자라",
+        "instagram.com": "인스타그램"
     }
 
     extended_query = await optimize_query_with_llm(payload.query)
@@ -91,7 +93,7 @@ async def run_serpapi_search(payload: SearchRequest):
             "engine": "google",
             "q": final_query,
             "api_key": serp_api_key,
-            "num": 5, # 각 사이트당 상위 5개씩 빠르게 추출
+            "num": 5, 
             "tbm": "isch",
             "start": (current_page - 1) * 5,
             "gl": "kr",

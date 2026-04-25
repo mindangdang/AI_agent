@@ -14,7 +14,7 @@ class FashionReRankingPipelineLight:
         self.lambda_weight = lambda_weight
         
         print("Fashion-CLIP 모델 로드 중 (단일 모델 적재)...")
-        self.model_id = "patrickjohncyh/fashion-clip"
+        self.model_id = "Marqo/marqo-fashionSigLIP"
         self.processor = CLIPProcessor.from_pretrained(self.model_id)
         self.model = CLIPModel.from_pretrained(self.model_id).to(self.device)
         self.model.eval()
