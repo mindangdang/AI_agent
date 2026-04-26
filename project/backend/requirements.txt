@@ -15,4 +15,5 @@ python-multipart
 torch
 transformers
 ftfy 
-open_clip
+open_clip_torch
+accelerate

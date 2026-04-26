@@ -9,7 +9,10 @@ default:
   @just --list
 
 frontend:
-  cd {{frontend_dir}} && npm run dev
+  cd {{frontend_dir}} && npm run dev -- --host 0.0.0.0
 
 backend:
   BACKEND_PORT={{backend_port}} uvicorn project.backend.main:app --reload --host 0.0.0.0 --port {{backend_port}}
+
+all:
+  trap 'kill 0' SIGINT; just backend & just frontend & wait

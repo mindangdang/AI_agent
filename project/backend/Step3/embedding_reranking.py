@@ -21,7 +21,8 @@ class FashionSiglipReRankingPipeline:
         self.model = AutoModel.from_pretrained(
             self.model_id, 
             torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
-            trust_remote_code=True
+            trust_remote_code=True,
+            device_map={"": self.device}
         ).to(self.device)
         self.model.eval()
         
