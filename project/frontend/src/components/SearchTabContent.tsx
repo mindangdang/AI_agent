@@ -23,6 +23,8 @@ export function SearchTabContent({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDetailedSearch, setIsDetailedSearch] = useState(false);
+  const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" });
   const [loading, setLoading] = useState(false);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
@@ -40,10 +42,11 @@ export function SearchTabContent({
     }
   }, [quotaCountdown]);
 
-  const fetchResults = async (page: number, isAppend: boolean) => {
+  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string) => {
     setLoading(true);
     try {
       let res;
+      const currentQuery = queryOverride !== undefined ? queryOverride : searchQuery;
 
       if (searchMode === "multimodal") {
         if (!imageFile) {
@@ -51,7 +54,7 @@ export function SearchTabContent({
         }
         const formData = new FormData();
         formData.append('image', imageFile);
-        formData.append('user_text', searchQuery || '비슷한 상품 찾아줘');
+        formData.append('user_text', currentQuery || '비슷한 상품 찾아줘');
 
         res = await fetch('/api/multimodal', {
           method: 'POST',
@@ -62,7 +65,7 @@ export function SearchTabContent({
         res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: searchQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
+          body: JSON.stringify({ query: currentQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
         });
       }
 
@@ -120,7 +123,21 @@ export function SearchTabContent({
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
-    if (searchMode !== "multimodal" && !searchQuery) return;
+    
+    let finalQuery = searchQuery;
+    if (searchMode === "digging" && isDetailedSearch) {
+      finalQuery = [
+        detailedSearchQuery.mood,
+        detailedSearchQuery.color,
+        detailedSearchQuery.fit,
+        detailedSearchQuery.category
+      ].filter(Boolean).join(" ");
+      if (!finalQuery.trim()) return;
+      setSearchQuery(finalQuery); // 더 보기(Pagination) 기능을 위해 통합된 쿼리로 업데이트
+    } else {
+      if (searchMode !== "multimodal" && !searchQuery) return;
+    }
+
     if (searchMode === "multimodal" && !imageFile) {
       alert("멀티모달 검색을 위해 이미지를 붙여넣어주세요. (Ctrl+V / Cmd+V)");
       return;
@@ -129,7 +146,7 @@ export function SearchTabContent({
     setCurrentPage(1);       // 1페이지로 리셋
     setSearchResults([]);    // 기존 화면 싹 지우기
     setGeneratedImage(null);
-    await fetchResults(1, false); // 1페이지 데이터 가져와서 덮어쓰기
+    await fetchResults(1, false, finalQuery); // 1페이지 데이터 가져와서 덮어쓰기
   };
 
   // 2. '더 보기' 버튼을 눌렀을 때
@@ -252,22 +269,73 @@ export function SearchTabContent({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* 상세 검색어 토글 버튼 */}
+          {searchMode === "digging" && (
+            <div className="flex justify-end px-4 -mb-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-gray-600 hover:text-black transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={isDetailedSearch}
+                  onChange={(e) => setIsDetailedSearch(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black accent-black"
+                />
+                상세 검색어
+              </label>
+            </div>
+          )}
+
           <div className="relative w-full">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 w-6 h-6 transition-colors group-focus-within:text-black" />
-            <input
-              type="text"
-              onPaste={handlePaste}
-              placeholder={
-                searchMode === "digging" 
-                  ? "What are you looking for? (e.g., 워싱 디스트로이드 데님)"
-                  : searchMode === "ai"
-                  ? "머릿속 무드를 설명해주세요 (e.g., 연청 크롭 데님 트러커 자켓)"
-                  : "이미지를 붙여넣고(Ctrl+V) 추가 설명(선택)을 입력하세요."
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-16 pr-32 py-5 bg-white border-2 border-gray-100 rounded-[2rem] shadow-lg shadow-gray-100 focus:outline-none focus:border-black transition-all text-lg font-medium"
-            />
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 w-6 h-6 transition-colors group-focus-within:text-black z-10 pointer-events-none" />
+            
+            {searchMode === "digging" && isDetailedSearch ? (
+              <div className="w-full pl-16 pr-32 py-5 bg-white border-2 border-gray-100 rounded-[2rem] shadow-lg shadow-gray-100 focus-within:border-black transition-all flex items-center gap-1 md:gap-2">
+                <input
+                  type="text"
+                  placeholder="무드(ex:빈티지)"
+                  value={detailedSearchQuery.mood}
+                  onChange={(e) => setDetailedSearchQuery(prev => ({ ...prev, mood: e.target.value }))}
+                  className="w-1/4 bg-transparent focus:outline-none text-center placeholder:text-gray-400 text-xs md:text-base font-medium border-r border-gray-200"
+                />
+                <input
+                  type="text"
+                  placeholder="색상(ex:연청)"
+                  value={detailedSearchQuery.color}
+                  onChange={(e) => setDetailedSearchQuery(prev => ({ ...prev, color: e.target.value }))}
+                  className="w-1/4 bg-transparent focus:outline-none text-center placeholder:text-gray-400 text-xs md:text-base font-medium border-r border-gray-200"
+                />
+                <input
+                  type="text"
+                  placeholder="핏(ex:플레어)"
+                  value={detailedSearchQuery.fit}
+                  onChange={(e) => setDetailedSearchQuery(prev => ({ ...prev, fit: e.target.value }))}
+                  className="w-1/4 bg-transparent focus:outline-none text-center placeholder:text-gray-400 text-xs md:text-base font-medium border-r border-gray-200"
+                />
+                <input
+                  type="text"
+                  placeholder="카테고리(ex:팬츠)"
+                  value={detailedSearchQuery.category}
+                  onChange={(e) => setDetailedSearchQuery(prev => ({ ...prev, category: e.target.value }))}
+                  className="w-1/4 bg-transparent focus:outline-none text-center placeholder:text-gray-400 text-xs md:text-base font-medium"
+                />
+              </div>
+            ) : (
+              <input
+                type="text"
+                onPaste={handlePaste}
+                placeholder={
+                  searchMode === "digging" 
+                    ? "What are you looking for? (e.g., 워싱 디스트로이드 데님)"
+                    : searchMode === "ai"
+                    ? "머릿속 무드를 설명해주세요 (e.g., 연청 크롭 데님 트러커 자켓)"
+                    : "이미지를 붙여넣고(Ctrl+V) 추가 설명(선택)을 입력하세요."
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-16 pr-32 py-5 bg-white border-2 border-gray-100 rounded-[2rem] shadow-lg shadow-gray-100 focus:outline-none focus:border-black transition-all text-lg font-medium"
+              />
+            )}
+
             <button
               disabled={loading || quotaCountdown !== null}
               className="absolute right-3 top-1/2 -translate-y-1/2 px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-all font-black tracking-widest uppercase text-xs"
