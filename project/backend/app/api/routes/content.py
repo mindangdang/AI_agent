@@ -102,7 +102,7 @@ async def run_serpapi_search(payload: SearchRequest):
             "start": (current_page - 1) * 5,
             "gl": "kr",
             "hl": "ko",
-            "tbs": "qdr:m"
+            "sort": "date" 
         }
         
         try:
