@@ -2,6 +2,7 @@ import os
 import traceback
 import uuid
 import asyncio
+import io
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, Form
@@ -15,6 +16,15 @@ from project.backend.Step3.image_search import generate_image_from_query,upload_
 from project.backend.Step1.utils import analyze_description_with_gemini
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
+
+import traceback
+import torch
+import torch.nn.functional as F
+from PIL import Image
+from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
+from project.backend.Step3.embedding_reranking import fetch_user_data_from_neon
+from project.backend.Step2.preferance_llm import get_image_bytes,format_data_for_prompt
+from google.genai import types
 
 load_backend_env()
 
@@ -71,6 +81,8 @@ async def extract_and_save_url(
 
 @router.post("/pse")
 async def run_serpapi_search(payload: SearchRequest):
+
+    #1.serpapi 검색
     serp_api_key = os.environ.get("SERP_API_KEY")
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
@@ -134,29 +146,124 @@ async def run_serpapi_search(payload: SearchRequest):
     except ValueError:
         current_page = 1
 
+    #2. 리랭킹 파이프라인
+    user_id=1
+    pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
+    wishlist_db_items = await fetch_user_data_from_neon(user_id)
+    # user_query_vector는 rerank_search_results 내부에서 처리하므로 제거
+    
+    def _load_local_images_and_build_vector(items: list[dict], pipeline_instance) -> torch.Tensor:
+        """디스크 I/O와 벡터 수학 연산을 스레드 하나에서 일괄 처리합니다."""
+        valid_list = []
+        for item in items:
+            try:
+                # DB에 저장된 필드명에 맞춰 로컬 경로 추출
+                local_path = item.get("image_url") 
+                
+                if not local_path or not os.path.exists(local_path):
+                    print(f"파일을 찾을 수 없음: {local_path}")
+                    continue
+                    
+                # 디스크에서 읽어 즉시 PIL 객체로 변환
+                item["image_obj"] = Image.open(local_path).convert("RGB")
+                item["category"] = item.get("category", "")
+                valid_list.append(item)
+            except Exception as e:
+                print(f"로컬 이미지 로드 에러 ({local_path}): {e}")
+                
+        if not valid_list:
+            return None
+            
+        # 1-2. 메모리에 올라간 객체들로 SVD 연산 수행
+        taste_vector = pipeline_instance.build_user_taste_vector(valid_list)
+        
+        # 1-3. 연산 완료 후 메모리 소각 (필수)
+        for item in valid_list:
+            if "image_obj" in item:
+                item["image_obj"].close()
+                
+        return taste_vector
+
+    if wishlist_db_items:
+        print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 로컬 로딩 및 합성 시작...")
+        
+        # 이벤트 루프 방어를 위해 디스크 읽기 + 딥러닝 연산을 통째로 스레드에 던집니다.
+        user_taste_vector = await asyncio.to_thread(
+            _load_local_images_and_build_vector,
+            wishlist_db_items,
+            pipeline
+        )
+
+    # 예외 처리 (위시리스트가 없거나 경로 에러로 다 날아간 경우 Cold Start 대비)
+    if user_taste_vector is None:
+        print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
+        dummy = torch.zeros(1, 768).to(pipeline.device) # SigLIP 768차원 기준
+        user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
+
     try:
+        # 2. Scatter: 타겟 사이트 병렬 검색
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1. Scatter: 모든 타겟 사이트에 동시에 요청
             tasks = [
-                fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
+                fetch_from_single_site(client, extended_query, domain, name, current_page)
                 for domain, name in domain_map.items()
             ]
             results_per_site = await asyncio.gather(*tasks, return_exceptions=True)
 
-        mixed_results = []
+        # 3. 데이터 평탄화 
+        raw_items = [item for sublist in results_per_site if isinstance(sublist, list) for item in sublist]
         
-        # 2. Gather & Interleave: 라운드 로빈 방식으로 골고루 섞기
-        valid_lists = [res for res in results_per_site if isinstance(res, list) and res]
-        
-        while valid_lists:
-            for site_items in valid_lists[:]: # 복사본을 순회하며 pop
-                if site_items:
-                    mixed_results.append(site_items.pop(0))
-                if not site_items:
-                    valid_lists.remove(site_items)
+        if not raw_items:
+            return {"success": True, "results": []}
 
-        print(f"최종결과 개수: {len(mixed_results)}")
-        return {"success": True, "results": mixed_results}
+        # 4. In-Memory 스트리밍 다운로드 파이프라인
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://www.google.com/"
+        }
+        
+        async def download_image_to_memory(dl_client: httpx.AsyncClient, item: dict):
+            target_urls = [item.get("original"), item.get("thumbnail")]
+            for url in target_urls:
+                if not url: continue
+                try:
+                    resp = await dl_client.get(url, headers=headers, timeout=5.0, follow_redirects=True)
+                    resp.raise_for_status()
+                    
+                    # 디스크 I/O 없이 바이트 스트림을 즉시 PIL 객체로 변환
+                    item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
+                    return item
+                except Exception:
+                    continue
+            return None
+
+        print(f"{len(raw_items)}개 이미지 In-Memory 다운로드 시작...")
+        async with httpx.AsyncClient(timeout=10.0) as dl_client:
+            download_tasks = [download_image_to_memory(dl_client, item) for item in raw_items]
+            downloaded_items = await asyncio.gather(*download_tasks)
+            
+        valid_items = [item for item in downloaded_items if item is not None]
+
+        # 6. 머신러닝 리랭킹 (워커 스레드 위임)
+        if valid_items:
+            ranked_results = await asyncio.to_thread(
+                pipeline.rerank_search_results,
+                search_results=valid_items,
+                user_taste_vector=user_taste_vector,
+                query_text=payload.query,
+                semantic_thresh=0.10,
+                aesthetic_thresh=0.0
+            )
+        else:
+            ranked_results = []
+
+        # 7. 클라이언트 응답용 데이터 정제 (JSON 직렬화 에러 방지)
+        for item in ranked_results:
+            item.pop("image_obj", None)
+            item.pop("original_url", None)
+            item.pop("thumbnail_url", None)
+
+        print(f"최종결과 개수: {len(ranked_results)}")
+        return {"success": True, "results": ranked_results}
     
     except Exception as exc:
         traceback.print_exc()
