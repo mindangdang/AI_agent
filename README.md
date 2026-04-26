@@ -9,4 +9,5 @@ User preference based Digging Web with AI.
 # How to Start 
 
 -backend: typing 'just backend' to terminal
+
 -frontend: typing 'just frontend' to another terminal
