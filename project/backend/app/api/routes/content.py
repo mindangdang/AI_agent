@@ -86,7 +86,7 @@ async def run_serpapi_search(payload: SearchRequest):
 
     async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
         product_hierarchy_query = "(> products)"
-        exclude_list_pages = "-inurl:search -inurl:category -inurl:tags"
+        exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
         final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
         
         params = {
@@ -111,7 +111,7 @@ async def run_serpapi_search(payload: SearchRequest):
                 "id": str(uuid.uuid4()),
                 "category": "PRODUCT",
                 "recommend": f"{site_name}에서 발견한 힙한 아이템",
-                "image_url": item.get("original", "") or item.get("thumbnail", ""),
+                "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
                 "url": item.get("link", ""),
                 "summary_text": item.get("title", "상품명 없음"),
                 "facts": {
