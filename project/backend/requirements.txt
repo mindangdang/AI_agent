@@ -14,4 +14,5 @@ supabase
 python-multipart
 torch
 transformers
-
+ftfy 
+open_clip

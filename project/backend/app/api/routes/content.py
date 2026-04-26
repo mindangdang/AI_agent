@@ -3,8 +3,11 @@ import traceback
 import uuid
 import asyncio
 import io
-
+import traceback
+import torch
+from PIL import Image
 import httpx
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, Form
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
@@ -16,15 +19,9 @@ from project.backend.Step3.image_search import generate_image_from_query,upload_
 from project.backend.Step1.utils import analyze_description_with_gemini
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
-
-import traceback
-import torch
-import torch.nn.functional as F
-from PIL import Image
 from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
-from project.backend.Step3.embedding_reranking import fetch_user_data_from_neon
-from project.backend.Step2.preferance_llm import get_image_bytes,format_data_for_prompt
-from google.genai import types
+from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
+
 
 load_backend_env()
 
