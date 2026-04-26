@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Loader2, Zap } from 'lucide-react';
+import { Plus, Loader2, Zap, Folder, ArrowLeft } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -27,6 +27,7 @@ export function FeedTabContent({
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [currentFolder, setCurrentFolder] = useState<string | null>(null);
 
   const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
   const categories = useMemo(
@@ -37,6 +38,19 @@ export function FeedTabContent({
     () => (selectedCategory === 'All' ? items : items.filter((item) => item.category === selectedCategory)),
     [items, selectedCategory]
   );
+
+  const folders = useMemo(() => {
+    const subs = new Set<string>();
+    filteredItems.forEach((item) => {
+      if (item.sub_category) subs.add(item.sub_category);
+    });
+    return Array.from(subs);
+  }, [filteredItems]);
+
+  const itemsToDisplay = useMemo(() => {
+    if (currentFolder) return filteredItems.filter((item) => item.sub_category === currentFolder);
+    return filteredItems.filter((item) => !item.sub_category);
+  }, [filteredItems, currentFolder]);
 
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
@@ -64,6 +78,7 @@ export function FeedTabContent({
           id: Date.now() + index,
           url: nextUrl,
           category: item.category || 'General',
+          sub_category: item.sub_category || '',
           facts: item.facts || {},
           recommend: item.recommend || 'Extracted',
           image_url: item.image_url || '',
@@ -177,7 +192,10 @@ export function FeedTabContent({
           {categories.map((category) => (
             <button
               key={category}
-              onClick={() => setSelectedCategory(category)}
+            onClick={() => {
+              setSelectedCategory(category);
+              setCurrentFolder(null);
+            }}
               className={[
                 "px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest transition-all",
                 selectedCategory === category
@@ -192,7 +210,37 @@ export function FeedTabContent({
       )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch">
-        {filteredItems.map((item) => (
+        {currentFolder && (
+          <div className="col-span-full mb-2 flex items-center gap-4">
+            <button
+              onClick={() => setCurrentFolder(null)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+            <h3 className="text-xl font-black uppercase tracking-tight text-gray-800">{currentFolder}</h3>
+          </div>
+        )}
+
+        {!currentFolder &&
+          folders.map((folder) => (
+            <motion.div
+              layout
+              key={`folder-${folder}`}
+              onClick={() => setCurrentFolder(folder)}
+              className="group relative flex aspect-[4/4.6] flex-col items-center justify-center overflow-hidden rounded-3xl border border-black/5 bg-gray-50 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
+            >
+              <Folder className="w-12 h-12 text-gray-300 group-hover:text-black transition-colors mb-3" fill="currentColor" />
+              <h3 className="text-sm font-black text-gray-600 group-hover:text-black uppercase tracking-widest text-center px-4 line-clamp-2">
+                {folder}
+              </h3>
+              <p className="text-[10px] font-bold text-gray-400 mt-2 bg-white px-3 py-1 rounded-full shadow-sm">
+                {filteredItems.filter((i) => i.sub_category === folder).length} ITEMS
+              </p>
+            </motion.div>
+          ))}
+
+        {itemsToDisplay.map((item) => (
           <FeedItemCard
             key={item.id}
             factKeysToShow={factKeysToShow}
