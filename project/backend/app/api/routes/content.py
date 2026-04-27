@@ -7,6 +7,7 @@ import traceback
 import torch
 from PIL import Image
 import httpx
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, Form
 from project.backend.app.core.database import get_repos
@@ -24,6 +25,7 @@ from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
 
 
 load_backend_env()
+LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
 router = APIRouter()
 
@@ -147,7 +149,6 @@ async def run_serpapi_search(payload: SearchRequest):
     user_id=1
     pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
     wishlist_db_items = await fetch_user_data_from_neon(user_id)
-    # user_query_vector는 rerank_search_results 내부에서 처리하므로 제거
     
     def _load_local_images_and_build_vector(items: list[dict], pipeline_instance) -> torch.Tensor:
         """디스크 I/O와 벡터 수학 연산을 스레드 하나에서 일괄 처리합니다."""
@@ -156,6 +157,10 @@ async def run_serpapi_search(payload: SearchRequest):
             try:
                 # DB에 저장된 필드명에 맞춰 로컬 경로 추출
                 local_path = item.get("image_url") 
+
+                # 단순 파일명인 경우 IMAGE_DIR과 결합하여 절대 경로 생성
+                if local_path and not local_path.startswith(('http://', 'https://')):
+                    local_path = os.path.join(str(LOCAL_IMAGE_DIR), os.path.basename(local_path))
                 
                 if not local_path or not os.path.exists(local_path):
                     print(f"파일을 찾을 수 없음: {local_path}")
@@ -201,7 +206,7 @@ async def run_serpapi_search(payload: SearchRequest):
         # 2. Scatter: 타겟 사이트 병렬 검색
         async with httpx.AsyncClient(timeout=30.0) as client:
             tasks = [
-                fetch_from_single_site(client, extended_query, domain, name, current_page)
+                fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
                 for domain, name in domain_map.items()
             ]
             results_per_site = await asyncio.gather(*tasks, return_exceptions=True)
