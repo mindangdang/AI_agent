@@ -89,7 +89,7 @@ async def run_serpapi_search(payload: SearchRequest):
 
     domain_map = {
         "musinsa.com": "무신사",
-        "kream.co.kr": "KREAM",
+        #"kream.co.kr": "KREAM",
         "m.bunjang.co.kr" : "번개장터",
         "fruitsfamily.com": "후루츠패밀리",
         "zara.com": "자라",
