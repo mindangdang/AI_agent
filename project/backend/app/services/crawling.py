@@ -59,6 +59,8 @@ async def background_crawl_and_save(
             # 저장된 최신 아이템 정보를 다시 조회하여 클라이언트에 전송
             all_items = await repos.saved_posts.list_feed_items(user_id)
             new_items = [item for item in all_items if item.get("url") == post_url or item.get("source_url") == post_url]
+            if not new_items:
+                print("[백그라운드] DB에서 새 아이템을 찾을 수 없습니다.")
 
         if manager:
             payload = {
@@ -67,6 +69,7 @@ async def background_crawl_and_save(
                 "items": new_items,
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+            print("[백그라운드] 웹소켓 메시지 전송 완료")
 
     except Exception as exc:
         print(f"[백그라운드] 전체 프로세스 에러: {exc}")
