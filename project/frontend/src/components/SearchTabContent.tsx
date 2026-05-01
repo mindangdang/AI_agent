@@ -9,12 +9,14 @@ import { SearchResultCard } from './SearchResultCard';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
+  refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
   user: AppUser | null;
 };
 
 export function SearchTabContent({
   onItemsChange,
+  refreshItems,
   refreshTaste,
   user,
 }: SearchTabContentProps) {
@@ -70,6 +72,44 @@ export function SearchTabContent({
   }, [hasSearchActivity, isDetailedSearch, searchMode]);
 
   useEffect(() => {
+    if (!user) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
+    let ws: WebSocket;
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === "SEARCH_SUCCESS") {
+            if (data.is_append) {
+              setSearchResults(prev => [...prev, ...(data.results || [])]);
+            } else {
+              setSearchResults(data.results || []);
+            }
+            setLoading(false);
+          } else if (data.type === "SEARCH_ERROR") {
+            alert(data.message || "검색 중 오류가 발생했습니다.");
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error("웹소켓 메시지 파싱 오류:", err);
+        }
+      };
+    } catch (err) {
+      console.error("웹소켓 연결 에러:", err);
+    }
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
       const timer = setTimeout(() => setQuotaCountdown(quotaCountdown - 1), 1000);
       return () => clearTimeout(timer);
@@ -108,6 +148,7 @@ export function SearchTabContent({
 
       if (res.status === 429) {
         setQuotaCountdown(60);
+        setLoading(false);
         return;
       }
 
@@ -117,6 +158,11 @@ export function SearchTabContent({
       }
 
       const data = await res.json();
+
+      if (searchMode === "digging" && data.success && !data.results) {
+        // 검색이 백그라운드 태스크로 전환되었으므로 웹소켓 이벤트 수신 대기 (로딩 상태 유지)
+        return;
+      }
 
       if (isAppend) {
         // 더 보기: 기존 결과 뒤에 새 결과를 배열로 이어 붙임
@@ -130,10 +176,10 @@ export function SearchTabContent({
           setGeneratedImage(null);
         }
       }
+      setLoading(false);
     } catch (error: any) {
       console.error(error);
       alert(error.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -247,6 +293,7 @@ export function SearchTabContent({
         created_at: new Date().toISOString(),
       };
       onItemsChange((prev) => [newItem, ...prev]);
+      await refreshItems();
 
       alert("피드에 저장되었습니다!");
       await refreshTaste();

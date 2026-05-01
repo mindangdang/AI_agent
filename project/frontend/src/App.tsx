@@ -123,6 +123,7 @@ export default function App() {
               <Tabs.Content value="search" forceMount className="w-full">
                 <SearchTabContent
                   onItemsChange={setItems}
+                  refreshItems={refreshItems}
                   refreshTaste={refreshTaste}
                   user={user}
                 />

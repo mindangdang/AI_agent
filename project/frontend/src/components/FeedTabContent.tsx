@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Loader2, Zap, Folder, ArrowLeft } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import type { SavedItem } from '../types/item';
 import type { AppUser } from '../types/user';
@@ -52,6 +52,45 @@ export function FeedTabContent({
     return filteredItems.filter((item) => !item.sub_category);
   }, [filteredItems, currentFolder]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
+    let ws: WebSocket;
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === "CRAWL_SUCCESS") {
+            onItemsChange((prev) => {
+              const filtered = prev.filter(item => item.id !== data.placeholder_id);
+              return [...(data.items || []), ...filtered];
+            });
+            void refreshItems();
+            void refreshTaste();
+          } else if (data.type === "CRAWL_ERROR") {
+            alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
+            onItemsChange((prev) => prev.filter(item => item.id !== data.placeholder_id));
+            void refreshItems();
+          }
+        } catch (err) {
+          console.error("웹소켓 메시지 파싱 오류:", err);
+        }
+      };
+    } catch (err) {
+      console.error("웹소켓 연결 에러:", err);
+    }
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, [user]);
+
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
       const res = await fetch('/api/extract-url', {
@@ -71,11 +110,9 @@ export function FeedTabContent({
       };
     },
     onSuccess: ({ nextUrl, data }) => {
-      if (data.success && data.status === 'processing') {
-        alert(`✨ ${data.message}`);
-      } else if (data.success && data.data && Array.isArray(data.data)) {
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         const newItems = data.data.map((item: any, index: number) => ({
-          id: Date.now() + index,
+          id: item.id || Date.now() + index,
           url: nextUrl,
           category: item.category || 'General',
           sub_category: item.sub_category || '',
@@ -86,15 +123,27 @@ export function FeedTabContent({
           summary_text: item.summary_text || ''
         }));
         onItemsChange((prev) => [...newItems, ...prev]);
+      } else if (data.success && typeof data.item_id === 'number') {
+        onItemsChange((prev) => [
+          {
+            id: data.item_id,
+            url: nextUrl,
+            category: 'PROCESSING ',
+            sub_category: 'PROCESSING ',
+            facts: { title: '분석 중...' },
+            recommend: 'AI가 열심히 바이브를 추출하고 있어요 ',
+            image_url: '',
+            created_at: new Date().toISOString(),
+            summary_text: '',
+          },
+          ...prev,
+        ]);
+        alert(`✨ ${data.message}`);
       }
 
       setNewUrl("");
       setSessionId("");
-
-      window.setTimeout(() => {
-        void refreshItems();
-        void refreshTaste();
-      }, 3000);
+      void refreshItems();
     },
     onError: (error: Error) => {
       console.error(error);

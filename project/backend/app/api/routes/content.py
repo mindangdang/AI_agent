@@ -10,7 +10,18 @@ from PIL import Image
 import httpx
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, Form
+from fastapi import (
+    FastAPI,
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    UploadFile,
+    Form,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
@@ -28,6 +39,31 @@ from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
 load_backend_env()
 LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+        print(f"WebSocket: user {user_id} connected.")
+
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].remove(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        print(f"WebSocket: user {user_id} disconnected.")
+
+    async def broadcast_to_user(self, user_id: str, message: str):
+        if user_id in self.active_connections:
+            print(f"WebSocket: Sending message to user {user_id}")
+            await asyncio.gather(
+                *[connection.send_text(message) for connection in self.active_connections[user_id]]
+            )
+
 router = APIRouter()
 
 @router.post("/extract-url")
@@ -44,6 +80,9 @@ async def extract_and_save_url(
 
     if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
         raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
+
+    if not hasattr(request.app.state, "websocket_manager"):
+        request.app.state.websocket_manager = ConnectionManager()
 
     try:
         new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
@@ -78,113 +117,108 @@ async def extract_and_save_url(
         ],
     }
 
-
-@router.post("/pse")
-async def run_serpapi_search(payload: SearchRequest):
-
-    #1.serpapi 검색
+async def background_pse_search(app: FastAPI, user_id: str, query: str, page: int):
+    manager = getattr(app.state, "websocket_manager", None)
     serp_api_key = os.environ.get("SERP_API_KEY")
+    
     if not serp_api_key:
-        raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
+        if manager:
+            payload = {"type": "SEARCH_ERROR", "message": "SerpApi 키가 설정되지 않았습니다."}
+            await manager.broadcast_to_user(user_id, json.dumps(payload))
+        return
 
     domain_map = {
         "musinsa.com": "무신사",
-        #"kream.co.kr": "KREAM",
         "m.bunjang.co.kr" : "번개장터",
         "fruitsfamily.com": "후루츠패밀리",
         "zara.com": "자라",
         "instagram.com": "인스타그램"
     }
 
-    extended_query = await optimize_query_with_llm(payload.query)
-    extended_query = extended_query.get('final_query', payload.query)
-    print(f"SerpApi로 쏘는 쿼리: {extended_query}")
+    try:
+        extended_query = await optimize_query_with_llm(query)
+        extended_query = extended_query.get('final_query', query)
+        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
 
-    async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
-        product_hierarchy_query = "(> products)"
-        exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
-        final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
-        
-        params = {
-            "engine": "google",
-            "q": final_query,
-            "api_key": serp_api_key,
-            "num": 5, 
-            "tbm": "isch",
-            "start": (current_page - 1) * 5,
-            "gl": "kr",
-            "hl": "ko"
-        }
-        
-        try:
-            response = await client.get("https://serpapi.com/search", params=params)
-            response.raise_for_status()
-            items = response.json().get("images_results", [])
-            print(f"[{site_name}] 검색 성공")
+        async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
+            product_hierarchy_query = "(> products)"
+            exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
+            final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
             
-            return [{
-                "id": str(uuid.uuid4()),
-                "category": "PRODUCT",
-                "sub_category": "PRODUCT",
-                "recommend": f"{site_name}에서 발견한 아이템",
-                "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
-                "url": item.get("link", ""),
-                "summary_text": item.get("title", "상품명 없음"),
-                "facts": {
-                    "title": item.get("title", "상품명 없음"),
-                    "Price": item.get("price") or item.get("snippet") or "가격 미상",
-                    "Shop": site_name,
-                },
-            } for item in items]
-
-        except Exception as e:
-            print(f"[{domain}] 검색 실패: {e}")
-            return []
-
-    try:
-        current_page = max(1, int(payload.page)) if payload.page is not None else 1
-    except ValueError:
-        current_page = 1
-
-    #2. 리랭킹 파이프라인
-    user_id=1
-    pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
-    wishlist_db_items = await fetch_user_data_from_neon(user_id)
-    
-    user_taste_vector = None
-    if wishlist_db_items:
-        print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
-        
-        def _parse_vector_sync(v_str: str):
+            params = {
+                "engine": "google",
+                "q": final_query,
+                "api_key": serp_api_key,
+                "num": 5, 
+                "tbm": "isch",
+                "start": (current_page - 1) * 5,
+                "gl": "kr",
+                "hl": "ko"
+            }
+            
             try:
-                vec = json.loads(v_str)
-                if isinstance(vec, list) and len(vec) == 768:
-                    return vec
+                response = await client.get("https://serpapi.com/search", params=params)
+                response.raise_for_status()
+                items = response.json().get("images_results", [])
+                print(f"[{site_name}] 검색 성공")
+                
+                return [{
+                    "id": str(uuid.uuid4()),
+                    "category": "PRODUCT",
+                    "sub_category": "PRODUCT",
+                    "recommend": f"{site_name}에서 발견한 아이템",
+                    "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
+                    "url": item.get("link", ""),
+                    "summary_text": item.get("title", "상품명 없음"),
+                    "facts": {
+                        "title": item.get("title", "상품명 없음"),
+                        "Price": item.get("price") or item.get("snippet") or "가격 미상",
+                        "Shop": site_name,
+                    },
+                } for item in items]
+
             except Exception as e:
-                print(f"벡터 파싱 에러: {e}")
-            return None
+                print(f"[{domain}] 검색 실패: {e}")
+                return []
 
-        parse_tasks = [
-            asyncio.to_thread(_parse_vector_sync, item.get("image_vector"))
-            for item in wishlist_db_items if item.get("image_vector")
-        ]
-        parsed_results = await asyncio.gather(*parse_tasks)
-        image_vectors = [vec for vec in parsed_results if vec is not None]
+        try:
+            current_page = max(1, int(page)) if page is not None else 1
+        except ValueError:
+            current_page = 1
+
+        pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
+        wishlist_db_items = await fetch_user_data_from_neon(int(user_id))
         
-        if image_vectors:
-            user_taste_vector = pipeline.build_user_taste_vector(image_vectors)
+        user_taste_vector = None
+        if wishlist_db_items:
+            print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
+            
+            def _parse_vector_sync(v_str: str):
+                try:
+                    vec = json.loads(v_str)
+                    if isinstance(vec, list) and len(vec) == 768:
+                        return vec
+                except Exception as e:
+                    print(f"벡터 파싱 에러: {e}")
+                return None
 
-    # 예외 처리 (위시리스트가 없거나 경로 에러로 다 날아간 경우 Cold Start 대비)
-    if user_taste_vector is None:
-        print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
-        dummy = torch.zeros(1, 768).to(pipeline.device) # SigLIP 768차원 기준
-        user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
-        if pipeline.device == "cuda":
-            user_taste_vector = user_taste_vector.to(torch.bfloat16)
+            parse_tasks = [
+                asyncio.to_thread(_parse_vector_sync, item.get("image_vector"))
+                for item in wishlist_db_items if item.get("image_vector")
+            ]
+            parsed_results = await asyncio.gather(*parse_tasks)
+            image_vectors = [vec for vec in parsed_results if vec is not None]
+            
+            if image_vectors:
+                user_taste_vector = pipeline.build_user_taste_vector(image_vectors)
 
-    try:
-        # 2. Scatter: 타겟 사이트 병렬 검색
-        # timeout=None으로 설정하여 SerpApi 응답이 아무리 느려도 끝까지 대기
+        if user_taste_vector is None:
+            print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
+            dummy = torch.zeros(1, 768).to(pipeline.device)
+            user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
+            if pipeline.device == "cuda":
+                user_taste_vector = user_taste_vector.to(torch.bfloat16)
+
         async with httpx.AsyncClient(timeout=None) as client:
             tasks = [
                 fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
@@ -192,13 +226,14 @@ async def run_serpapi_search(payload: SearchRequest):
             ]
             results_per_site = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 3. 데이터 평탄화 
         raw_items = [item for sublist in results_per_site if isinstance(sublist, list) for item in sublist]
         
         if not raw_items:
-            return {"success": True, "results": []}
+            if manager:
+                payload = {"type": "SEARCH_SUCCESS", "results": [], "is_append": current_page > 1}
+                await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+            return
 
-        # 4. In-Memory 스트리밍 다운로드 파이프라인
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -216,8 +251,6 @@ async def run_serpapi_search(payload: SearchRequest):
                     try:
                         resp = await dl_client.get(target_url, headers=headers, timeout=12.0, follow_redirects=True)
                         resp.raise_for_status()
-                        
-                        # 디스크 I/O 없이 바이트 스트림을 즉시 PIL 객체로 변환
                         item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
                         return item
                     except Exception as e:
@@ -228,7 +261,6 @@ async def run_serpapi_search(payload: SearchRequest):
             return None
 
         print(f"{len(raw_items)}개 이미지 In-Memory 다운로드 시작...")
-        # 전체 타임아웃 해제, http2 활성화 및 동시성 50개 제한 세마포어 적용
         semaphore = asyncio.Semaphore(50)
         async with httpx.AsyncClient(timeout=None, http2=True) as dl_client:
             download_tasks = [download_image_to_memory(dl_client, item, semaphore) for item in raw_items]
@@ -237,31 +269,51 @@ async def run_serpapi_search(payload: SearchRequest):
         valid_items = [item for item in downloaded_items if item is not None]
         print(f"{len(valid_items)}개 이미지 다운로드 성공, 리랭킹 준비 완료.")
 
-        # 6. 머신러닝 리랭킹 (워커 스레드 위임)
         if valid_items:
             ranked_results = await asyncio.to_thread(
                 pipeline.rerank_search_results,
                 search_results=valid_items,
                 user_taste_vector=user_taste_vector,
-                query_text=payload.query,
+                query_text=query,
                 semantic_thresh=0.10,
                 aesthetic_thresh=0.0
             )
         else:
             ranked_results = []
 
-        # 7. 클라이언트 응답용 데이터 정제 (JSON 직렬화 에러 방지)
         for item in ranked_results:
             item.pop("image_obj", None)
             item.pop("original_url", None)
             item.pop("thumbnail_url", None)
 
         print(f"최종결과 개수: {len(ranked_results)}")
-        return {"success": True, "results": ranked_results}
+        if manager:
+            payload = {
+                "type": "SEARCH_SUCCESS",
+                "results": ranked_results,
+                "is_append": current_page > 1
+            }
+            await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
     
     except Exception as exc:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {exc}") from exc
+        if manager:
+            payload = {"type": "SEARCH_ERROR", "message": f"쇼핑 검색 중 오류: {exc}"}
+            await manager.broadcast_to_user(user_id, json.dumps(payload))
+
+@router.post("/pse")
+async def run_serpapi_search(
+    payload: SearchRequest,
+    request: Request,
+    background_tasks: BackgroundTasks
+):
+    if not hasattr(request.app.state, "websocket_manager"):
+        request.app.state.websocket_manager = ConnectionManager()
+
+    user_id = DEFAULT_USER_ID
+    background_tasks.add_task(background_pse_search, request.app, user_id, payload.query, payload.page)
+
+    return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
 
 
 @router.post("/lens")
@@ -461,3 +513,17 @@ async def delete_item(item_id: int, repos: Repositories = Depends(get_repos)):
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    if not hasattr(websocket.app.state, "websocket_manager"):
+        websocket.app.state.websocket_manager = ConnectionManager()
+
+    manager = websocket.app.state.websocket_manager
+    await manager.connect(websocket, user_id)
+    try:
+        while True:
+            await websocket.receive_text()  # Keep connection alive
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, user_id)
