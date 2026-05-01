@@ -67,16 +67,22 @@ export function FeedTabContent({
           const data = JSON.parse(event.data);
           
           if (data.type === "CRAWL_SUCCESS") {
+            console.log("[웹소켓] CRAWL_SUCCESS 메시지 수신: ", data);
+            // 웹소켓으로부터 최종 아이템 데이터를 받으면, 기존의 임시 아이템을 제거하고 새 아이템으로 교체합니다.
             onItemsChange((prev) => {
+              // placeholder_id와 일치하는 임시 아이템을 찾아서 제거합니다.
               const filtered = prev.filter(item => item.id !== data.placeholder_id);
+              console.log("id 일치여부 확인: ", prev.map(item => ({ id: item.id, placeholder_id: data.placeholder_id })));
+              // 새로 받은 최종 아이템(data.items)을 배열의 맨 앞에 추가합니다.
               return [...(data.items || []), ...filtered];
             });
-            void refreshItems();
+            // 전체 아이템을 다시 불러올 필요 없이, 취향 분석만 새로고침합니다.
+            setCurrentFolder((prev) => prev === 'PROCESSING ' ? null : prev);
             void refreshTaste();
           } else if (data.type === "CRAWL_ERROR") {
             alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
+            // 에러 발생 시, 해당 임시 아이템을 피드에서 제거합니다.
             onItemsChange((prev) => prev.filter(item => item.id !== data.placeholder_id));
-            void refreshItems();
           }
         } catch (err) {
           console.error("웹소켓 메시지 파싱 오류:", err);
@@ -89,7 +95,7 @@ export function FeedTabContent({
     return () => {
       if (ws) ws.close();
     };
-  }, [user]);
+  }, [user, onItemsChange, refreshTaste]);
 
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
@@ -109,41 +115,17 @@ export function FeedTabContent({
         data: await res.json(),
       };
     },
-    onSuccess: ({ nextUrl, data }) => {
+    onSuccess: ({ data }) => {
+      // 백그라운드 작업이 시작되면, 백엔드는 임시 아이템 정보를 응답으로 보내줍니다.
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        const newItems = data.data.map((item: any, index: number) => ({
-          id: item.id || Date.now() + index,
-          url: nextUrl,
-          category: item.category || 'General',
-          sub_category: item.sub_category || '',
-          facts: item.facts || {},
-          recommend: item.recommend || 'Extracted',
-          image_url: item.image_url || '',
-          created_at: new Date().toISOString(),
-          summary_text: item.summary_text || ''
-        }));
-        onItemsChange((prev) => [...newItems, ...prev]);
-      } else if (data.success && typeof data.item_id === 'number') {
-        onItemsChange((prev) => [
-          {
-            id: data.item_id,
-            url: nextUrl,
-            category: 'PROCESSING ',
-            sub_category: 'PROCESSING ',
-            facts: { title: '분석 중...' },
-            recommend: 'AI가 열심히 바이브를 추출하고 있어요 ',
-            image_url: '',
-            created_at: new Date().toISOString(),
-            summary_text: '',
-          },
-          ...prev,
-        ]);
-        alert(`✨ ${data.message}`);
+        // 이 임시 아이템을 UI에 먼저 표시하여 사용자에게 작업이 진행 중임을 알립니다.
+        onItemsChange((prev) => [data.data, ...prev]);
       }
-
+      // 입력 필드를 초기화합니다.
       setNewUrl("");
       setSessionId("");
-      void refreshItems();
+      // 여기서는 refreshItems()를 호출하지 않습니다.
+      // 최종 데이터는 웹소켓을 통해 받아와 상태를 업데이트할 것이기 때문입니다.
     },
     onError: (error: Error) => {
       console.error(error);
