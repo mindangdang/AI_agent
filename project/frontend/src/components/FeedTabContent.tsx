@@ -119,7 +119,7 @@ export function FeedTabContent({
       // 백그라운드 작업이 시작되면, 백엔드는 임시 아이템 정보를 응답으로 보내줍니다.
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         // 이 임시 아이템을 UI에 먼저 표시하여 사용자에게 작업이 진행 중임을 알립니다.
-        onItemsChange((prev) => [data.data, ...prev]);
+        onItemsChange((prev) => [...data.data, ...prev]);
       }
       // 입력 필드를 초기화합니다.
       setNewUrl("");
