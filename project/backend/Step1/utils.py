@@ -1,18 +1,45 @@
-import json
 import os
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 from typing import Optional, List
-import json
-import re
+import asyncio
 from project.backend.app.core.settings import load_backend_env
 from project.backend.app.core.resilience import with_llm_resilience
+from fastapi import WebSocket
+
+
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+        print(f"WebSocket: user {user_id} connected.")
+
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].remove(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        print(f"WebSocket: user {user_id} disconnected.")
+
+    async def broadcast_to_user(self, user_id: str, message: str):
+        if user_id in self.active_connections:
+            print(f"WebSocket: Sending message to user {user_id}")
+            await asyncio.gather(
+                *[connection.send_text(message) for connection in self.active_connections[user_id]]
+            )
 
 class ProductAnalysisResult(BaseModel):
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
     sub_category: Optional[str] = Field(description="아우터,자켓,상의,하의,주얼리,액세서리 중 1택", default=None)
+    
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:

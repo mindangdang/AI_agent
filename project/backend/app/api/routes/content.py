@@ -29,7 +29,7 @@ from project.backend.app.services.crawling import DEFAULT_USER_ID, background_cr
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
 from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
-from project.backend.Step1.utils import analyze_description_with_gemini
+from project.backend.Step1.utils import analyze_description_with_gemini, ConnectionManager
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
@@ -38,31 +38,6 @@ from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
 
 load_backend_env()
 LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[str, list[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, user_id: str):
-        await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-        self.active_connections[user_id].append(websocket)
-        print(f"WebSocket: user {user_id} connected.")
-
-    def disconnect(self, websocket: WebSocket, user_id: str):
-        if user_id in self.active_connections:
-            self.active_connections[user_id].remove(websocket)
-            if not self.active_connections[user_id]:
-                del self.active_connections[user_id]
-        print(f"WebSocket: user {user_id} disconnected.")
-
-    async def broadcast_to_user(self, user_id: str, message: str):
-        if user_id in self.active_connections:
-            print(f"WebSocket: Sending message to user {user_id}")
-            await asyncio.gather(
-                *[connection.send_text(message) for connection in self.active_connections[user_id]]
-            )
 
 router = APIRouter()
 
