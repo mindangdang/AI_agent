@@ -37,7 +37,7 @@ export function FeedTabContent({
 }: FeedTabContentProps) {
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
@@ -51,15 +51,18 @@ export function FeedTabContent({
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
+  const factKeysToShow = ['title', 'price_info', 'time_info', 'key_details'];
   const isFeedAddItem = (item: SavedItem) => parseItemFacts(item)?._source === 'feed_add';
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
   const categories = useMemo(
     () => {
       const itemCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean);
-      const visibleCategories = itemCategories.filter((category) => category.trim().toUpperCase() !== 'PROCESSING');
+      const visibleCategories = itemCategories.filter((category) => {
+        const normalizedCategory = category.trim().toUpperCase();
+        return normalizedCategory !== 'PROCESSING' && normalizedCategory !== 'PRODUCT';
+      });
 
-      return ['All', ...visibleCategories, 'PROCESSING'];
+      return ['All', 'PRODUCT', ...visibleCategories, 'PROCESSING'];
     },
     [menuItems]
   );
@@ -223,7 +226,7 @@ export function FeedTabContent({
       exit={{ opacity: 0 }}
       className="flex h-full min-h-0 flex-col"
     >
-      <header className="shrink-0">
+      <header className="shrink-0 pr-10 -translate-x-1">
         <div>
           <h2 className="text-4xl justify-center flex font-black tracking-tighter"><Zap fill='black'></Zap></h2>
           <AnimatePresence mode="wait">
@@ -294,61 +297,56 @@ export function FeedTabContent({
         </AnimatePresence>
 
         {items.length === 0 && !addItemMutation.isPending && (
-          <div className="text-center py-32 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-              <Zap className="w-10 h-10 text-yellow-400" fill="currentColor" />
-            </div>
-            <h3 className="text-2xl font-black tracking-tight mb-2">Strike your first POSE!</h3>
-            <p className="text-gray-500 font-medium">인스타그램 링크를 넣고 나만의 바이브를 수집하세요.</p>
+          <div className="text-center py-32 h-full flex flex-col justify-center itemms-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
+            <h3 className="text-2xl font-black tracking-tight mb-2">POSE!</h3>
+            <p className="text-gray-500 font-medium">프로덕트 링크를 넣고 나만의 바이브를 수집하세요.</p>
           </div>
         )}
       </div>
 
-      {items.length > 0 && (
-        <nav
-          className="fixed right-40 bottom-70 md:right-48 top-1/2 z-30 flex -translate-y-1/2 flex-col items-stretch gap-18"
-          aria-label="Feed category filters"
-          onWheel={handleCategoryWheel}
-        >
-          {categories.map((category) => {
-            const Icon = getCategoryIcon(category);
-            const label = getCategoryLabel(category);
-            const isSelected = selectedCategory === category;
+      <nav
+        className="fixed right-40 bottom-70 md:right-48 top-1/2 z-30 flex -translate-y-1/2 flex-col items-stretch gap-18"
+        aria-label="Feed category filters"
+        onWheel={handleCategoryWheel}
+      >
+        {categories.map((category) => {
+          const Icon = getCategoryIcon(category);
+          const label = getCategoryLabel(category);
+          const isSelected = selectedCategory === category;
 
-            return (
-              <button
-                key={category}
-                type="button"
-                title={category}
-                aria-label={`Show ${category} feed items`}
-                aria-pressed={isSelected}
-                onClick={() => {
-                  setSelectedCategory(category);
-                  setCurrentFolder(null);
-                }}
-                className={[
-                  "flex h-10 min-w-28 items-center gap-2 px-3 text-sm font-bold normal-case transition-colors",
-                  isSelected
-                    ? "text-black"
-                    : "text-gray-300 hover:text-gray-600",
-                ].join(' ')}
-              >
-                <Icon className="h-6 w-6" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            aria-label="Open add form"
-            aria-expanded={isAddPanelOpen}
-            onClick={() => setIsAddPanelOpen(true)}
-            className="mt-35 ml-3.5 left-10 flex p-2 w-25 cursor-pointer rounded-4xl justify-center items-center gap-2 px-3 text-sm font-bg-gray-700 transition-colors hover:text-gray-400"
-          >
-            <Plus className="h-10 w-10" strokeWidth={1}/>
-          </button>
-        </nav>
-      )}
+          return (
+            <button
+              key={category}
+              type="button"
+              title={category}
+              aria-label={`Show ${category} feed items`}
+              aria-pressed={isSelected}
+              onClick={() => {
+                setSelectedCategory(category);
+                setCurrentFolder(null);
+              }}
+              className={[
+                "flex h-10 min-w-28 items-center gap-2 px-3 text-sm font-bold normal-case transition-colors",
+                isSelected
+                  ? "text-black"
+                  : "text-gray-300 hover:text-gray-600",
+              ].join(' ')}
+            >
+              <Icon className="h-6 w-6" />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-label="Open add form"
+          aria-expanded={isAddPanelOpen}
+          onClick={() => setIsAddPanelOpen(true)}
+          className="mt-35 ml-3.5 left-10 flex p-2 w-25 cursor-pointer rounded-4xl justify-center items-center gap-2 px-3 text-sm font-bg-gray-700 transition-colors hover:text-gray-400"
+        >
+          <Plus className="h-10 w-10" strokeWidth={1}/>
+        </button>
+      </nav>
 
       <AnimatePresence>
         {isAddPanelOpen && (
