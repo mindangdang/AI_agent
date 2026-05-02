@@ -9,8 +9,7 @@ import {
   User,
 } from 'lucide-react';
 import { GoogleLoginButton } from './components/GoogleLoginButton';
-import { GoogleOAuthProvider } from '@react-oauth/google';
-import { FeedTabContent } from './components/FeedTabContent';``
+import { FeedTabContent } from './components/FeedTabContent';
 import { ItemDetailDialog } from './components/ItemDetailDialog';
 import { NavItem } from './components/NavItem';
 import { ProfileTabContent } from './components/ProfileTabContent';
@@ -224,8 +223,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   );
 }
 
-const GOOGLE_CLIENT_ID = "217086331535-n1na3k15bd6c6cllpj1am8hamjsl1ah9.apps.googleusercontent.com";
-
 // 로그인 상태와 화면 분기를 관리하는 진입점
 export default function App() {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -274,20 +271,21 @@ export default function App() {
 
   if (!user) {
     return (
-      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 font-sans">
-          <div className="flex flex-col items-center gap-8 p-10 bg-white rounded-3xl shadow-xl border border-gray-100">
-            <div className="text-center space-y-2">
-              <h1 className="text-5xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-500 via-yellow-400 to-purple-500">POSE!</h1>
-              <p className="text-gray-500 font-medium">당신의 취향에서 시작되는 새로운 발견</p>
-            </div>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 font-sans">
+        <div className="flex flex-col items-center gap-8 p-10 bg-white rounded-3xl shadow-xl border border-gray-100">
+          <div className="text-center space-y-2">
+            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-500 via-yellow-400 to-purple-500">POSE!</h1>
+            <p className="text-gray-500 font-medium">당신의 취향에서 시작되는 새로운 발견</p>
+          </div>
+          {/* 구글 로그인 버튼에 강제된 레이아웃 공간(div)을 확보하여 Flex 깨짐을 방지합니다. */}
+          <div className="flex w-full justify-center min-h-[44px]">
             <GoogleLoginButton
               onSuccess={(userData) => setUser(userData)}
               onError={(msg) => alert(msg)}
             />
           </div>
         </div>
-      </GoogleOAuthProvider>
+      </div>
     );
   }
 

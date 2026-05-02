@@ -41,7 +41,6 @@ export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps
     <GoogleLogin
       onSuccess={handleSuccess}
       onError={() => onError('구글 로그인 팝업 호출에 실패했습니다.')}
-      useOneTap
     />
   );
 }
