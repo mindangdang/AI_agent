@@ -59,7 +59,6 @@ async def extract_and_save_url(
     if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
         raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
 
-    # 백그라운드 태스크(Crawling 등)가 동일한 전역 매니저를 참조하도록 강제 할당
     request.app.state.websocket_manager = websocket_manager_instance
 
     try:
@@ -249,7 +248,6 @@ async def run_serpapi_search(
     request: Request,
     background_tasks: BackgroundTasks
 ):
-    # 백그라운드 태스크(Search 등)가 동일한 전역 매니저를 참조하도록 강제 할당
     request.app.state.websocket_manager = websocket_manager_instance
 
     user_id = DEFAULT_USER_ID
