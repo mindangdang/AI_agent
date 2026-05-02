@@ -18,9 +18,6 @@ from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
 
 
-DEFAULT_USER_ID = "1"
-
-
 async def background_crawl_and_save(
     app: FastAPI,
     item_id: int,

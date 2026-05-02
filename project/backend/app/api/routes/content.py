@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
-from project.backend.app.services.crawling import DEFAULT_USER_ID, background_crawl_and_save
+from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
 from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
@@ -35,6 +35,7 @@ from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
 from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
+from project.backend.app.api.routes.auth import get_current_user
 
 
 load_backend_env()
@@ -51,11 +52,12 @@ async def extract_and_save_url(
     request: Request,
     background_tasks: BackgroundTasks,
     repos: Repositories = Depends(get_repos),
+    current_user: dict = Depends(get_current_user)
 ):
     post_url = payload.url
     session_id = payload.session_id
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
-    user_id = DEFAULT_USER_ID
+    user_id = current_user.get("sub")
 
     if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
         raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
@@ -112,7 +114,8 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 
         # 1 & 2. 유저 취향 벡터 합성과 LLM 쿼리 확장을 비동기 병렬 처리
         async def build_taste_vector():
-            wishlist_db_items = await fetch_user_data_from_neon(int(user_id))
+            # Google ID(sub)는 21자리의 문자열이므로 int 대신 str로 안전하게 넘깁니다.
+            wishlist_db_items = await fetch_user_data_from_neon(str(user_id))
             if not wishlist_db_items:
                 return None
             print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
@@ -252,11 +255,12 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 async def run_serpapi_search(
     payload: SearchRequest,
     request: Request,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
 ):
     request.app.state.websocket_manager = websocket_manager_instance
 
-    user_id = DEFAULT_USER_ID
+    user_id = current_user.get("sub")
     background_tasks.add_task(background_pse_search, request.app, user_id, payload.query, payload.page)
 
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
@@ -402,6 +406,7 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
 async def save_manual_item(
     payload: ManualItemCreate,
     repos: Repositories = Depends(get_repos),
+    current_user: dict = Depends(get_current_user)
 ):
     try:
         async def fetch_image_task() -> str:
@@ -436,8 +441,10 @@ async def save_manual_item(
         vector_list = await asyncio.to_thread(_extract_vector_sync, local_image_url, sub_category or category)
         vector_str = str(vector_list) if vector_list else None
 
+        user_id = current_user.get("sub")
+
         await repos.saved_posts.create_manual_item(
-            user_id=str(payload.user_id),
+            user_id=str(user_id),
             url=payload.url,
             category=category,
             sub_category=sub_category,
@@ -454,9 +461,13 @@ async def save_manual_item(
 ######################################################################################
 
 @router.get("/items")
-async def get_items(user_id: str = "1", repos: Repositories = Depends(get_repos)):
+async def get_items(
+    current_user: dict = Depends(get_current_user), 
+    repos: Repositories = Depends(get_repos)
+):
     try:
-        items = await repos.saved_posts.list_feed_items(user_id)
+        user_id = current_user.get("sub")
+        items = await repos.saved_posts.list_feed_items(str(user_id))
         print(f"프론트로 보내는 아이템 수: {len(items)}")
         return items
     except Exception as exc:
@@ -465,7 +476,11 @@ async def get_items(user_id: str = "1", repos: Repositories = Depends(get_repos)
 
 
 @router.delete("/items/{item_id}")
-async def delete_item(item_id: int, repos: Repositories = Depends(get_repos)):
+async def delete_item(
+    item_id: int, 
+    current_user: dict = Depends(get_current_user), 
+    repos: Repositories = Depends(get_repos)
+):
     try:
         await repos.saved_posts.delete_by_id(item_id)
         await repos.saved_posts.conn.commit()

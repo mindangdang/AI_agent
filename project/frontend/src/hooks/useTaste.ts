@@ -11,7 +11,11 @@ export function useTaste(user: AppUser | null) {
     }
 
     try {
-      const res = await fetch(`/api/taste?user_id=${user.id}`, { cache: 'no-store' });
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/taste?user_id=${user.id}`, { 
+        cache: 'no-store',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
       if (!res.ok) {
         throw new Error(`Failed to fetch taste: ${res.status}`);

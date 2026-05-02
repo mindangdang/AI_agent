@@ -139,9 +139,13 @@ export function FeedTabContent({
 
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: string | number }) => {
+      const token = localStorage.getItem('access_token');
       const res = await fetch('/api/extract-url', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
       });
 
@@ -175,7 +179,11 @@ export function FeedTabContent({
 
   const deleteItemMutation = useMutation({
     mutationFn: async ({ id, userId }: { id: number; userId: string | number }) => {
-      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { method: 'DELETE' });
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
       if (!res.ok) {
         throw new Error('Failed to delete item');
