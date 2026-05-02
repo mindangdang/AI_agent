@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Zap, Folder, ArrowLeft, Grid3X3, Clock3, Package } from 'lucide-react';
+import { Plus, Loader2, Zap, Folder, ArrowLeft, Grid3X3, Clock3, Package, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type WheelEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
@@ -244,7 +244,7 @@ export function FeedTabContent({
         </div>
       </header>
 
-      <div className="feed-scroll-area mt-8 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-10">
+      <div className="feed-scroll-area mt-8 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-10 pt-1">
         <AnimatePresence mode="wait">
           <motion.div
             key={`${selectedCategory}-${currentFolder ?? 'root'}`}
@@ -255,14 +255,14 @@ export function FeedTabContent({
             className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch"
           >
             {shouldGroupItems && currentFolder && (
-              <div className="col-span-full mb-2 flex items-center gap-4">
+              <div className="col-span-full mb-5 flex items-center gap-4 border-b border-gray-200 pb-2">
+                <h3 className="text-2xl font-bold uppercase tracking-tight text-gray-800">{currentFolder}</h3>
                 <button
                   onClick={() => setCurrentFolder(null)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-xs font-black uppercase tracking-widest transition-colors"
+                  className="ml-auto flex items-center px-2 py-2 hover:bg-gray-200 rounded-full text-xs font-black tracking-widest transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" /> Back
+                  <X className="w-5 h-5" />
                 </button>
-                <h3 className="text-xl font-black uppercase tracking-tight text-gray-800">{currentFolder}</h3>
               </div>
             )}
 
@@ -272,14 +272,13 @@ export function FeedTabContent({
                   layout
                   key={`folder-${folder}`}
                   onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-[4/4.6] flex-col items-center justify-center overflow-hidden rounded-3xl border border-black/5 bg-gray-50 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
+                  className="group relative flex aspect-[4/4.6] flex-col items-center justify-center overflow-hidden rounded-3xl border border-black/40 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
                 >
-                  <Folder className="w-12 h-12 text-gray-300 group-hover:text-black transition-colors mb-3" fill="currentColor" />
-                  <h3 className="text-sm font-black text-gray-600 group-hover:text-black uppercase tracking-widest text-center px-4 line-clamp-2">
+                  <h3 className="absolute left-5 top-5 pr-5 text-sm font-bold text-black group-hover:text-black tracking-widest line-clamp-2">
                     {folder}
                   </h3>
-                  <p className="text-[10px] font-bold text-gray-400 mt-2 bg-white px-3 py-1 rounded-full shadow-sm">
-                    {filteredItems.filter((i) => i.sub_category === folder).length} ITEMS
+                  <p className="absolute bottom-5 right-5 text-xl font-extralight text-black">
+                    {filteredItems.filter((i) => i.sub_category === folder).length} items
                   </p>
                 </motion.div>
               ))}

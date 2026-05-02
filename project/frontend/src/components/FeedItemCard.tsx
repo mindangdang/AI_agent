@@ -89,7 +89,7 @@ export function FeedItemCard({
           )}
         </div>
 
-        <div className="mt-auto pt-3 flex items-center justify-end gap-2">
+        <div className="mt-auto pt-3 flex items-center gap-2">
           {item.url && item.url.startsWith('http') ? (
             <a
               href={item.url}
