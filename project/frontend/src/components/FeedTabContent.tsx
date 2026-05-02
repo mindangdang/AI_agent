@@ -138,7 +138,7 @@ export function FeedTabContent({
   }, [user, onItemsChange, refreshTaste]);
 
   const addItemMutation = useMutation({
-    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
+    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: string | number }) => {
       const res = await fetch('/api/extract-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,7 +174,7 @@ export function FeedTabContent({
   });
 
   const deleteItemMutation = useMutation({
-    mutationFn: async ({ id, userId }: { id: number; userId: number }) => {
+    mutationFn: async ({ id, userId }: { id: number; userId: string | number }) => {
       const res = await fetch(`/api/items/${id}?user_id=${userId}`, { method: 'DELETE' });
 
       if (!res.ok) {

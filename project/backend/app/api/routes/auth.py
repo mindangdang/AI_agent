@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from google.oauth2 import id_token
@@ -51,7 +51,7 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
             await conn.commit()
 
         # 3. 자체 JWT 발급
-        expiration = datetime.utcnow() + timedelta(days=7)
+        expiration = datetime.now(timezone.utc) + timedelta(days=7)
         internal_token = jwt.encode(
             {"sub": google_id, "name": name, "exp": expiration},
             JWT_SECRET,

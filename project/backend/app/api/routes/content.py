@@ -1,5 +1,4 @@
 import os
-import traceback
 import uuid
 import asyncio
 import io
@@ -22,6 +21,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import FileResponse
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
@@ -473,6 +473,14 @@ async def delete_item(item_id: int, repos: Repositories = Depends(get_repos)):
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/images/{filename}")
+async def serve_image(filename: str):
+    image_path = LOCAL_IMAGE_DIR / filename
+    if not image_path.exists() or not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path=image_path)
 
 
 @router.websocket("/ws/{user_id}")
