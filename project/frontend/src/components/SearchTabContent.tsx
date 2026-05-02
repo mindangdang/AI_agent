@@ -9,12 +9,14 @@ import { SearchResultCard } from './SearchResultCard';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
+  refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
   user: AppUser | null;
 };
 
 export function SearchTabContent({
   onItemsChange,
+  refreshItems,
   refreshTaste,
   user,
 }: SearchTabContentProps) {
@@ -70,6 +72,85 @@ export function SearchTabContent({
   }, [hasSearchActivity, isDetailedSearch, searchMode]);
 
   useEffect(() => {
+    if (!user) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
+    let ws: WebSocket;
+
+   try {
+      console.log(`[웹소켓] 연결 시도 중... (${wsUrl})`);
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log("[웹소켓] 연결 성공!");
+      };
+
+      ws.onerror = (error) => {
+        console.error("[웹소켓] 에러 발생:", error);
+      };
+
+      ws.onclose = (event) => {
+        console.log(`[웹소켓] 연결 종료 (코드: ${event.code}, 이유: ${event.reason})`);
+      };
+
+      ws.onmessage = (event) => {
+        console.log("[웹소켓] 메시지 수신 (raw):", event.data);
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[웹소켓] 메시지 파싱 완료:", data);
+          
+          if (data.type === "SEARCH_SUCCESS") {
+            console.log(`[웹소켓] 검색 결과(SEARCH_SUCCESS) ${data.results?.length || 0}개 수신, is_append: ${data.is_append}`);
+            
+            if (data.is_append) {
+              setSearchResults(prev => {
+                // 검색 결과에 고유 id가 없는 경우 프론트에서 임시 id 생성
+                const newItems = (data.results || []).map((item: any) => ({
+                  ...item,
+                  id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                }));
+
+                const uniqueItems = newItems.filter(
+                  (newItem: SavedItem) => !prev.some(item => item.id === newItem.id)
+                );
+                
+                return [...prev, ...uniqueItems];
+              });
+            } else {
+              setSearchResults((data.results || []).map((item: any) => ({
+                ...item,
+                id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+              })));
+            }
+          } else if (data.type === "SEARCH_FINISHED") {
+            console.log("[웹소켓] 검색 완료(SEARCH_FINISHED). 로딩 상태 해제.");
+            setLoading(false);
+          } else if (data.type === "SEARCH_ERROR") {
+            console.log("[웹소켓] 검색 에러(SEARCH_ERROR):", data.message);
+            alert(data.message || "검색 중 오류가 발생했습니다.");
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error("웹소켓 메시지 파싱 오류:", err);
+        }
+      };
+    } catch (err) {
+      console.error("웹소켓 연결 에러:", err);
+    }
+
+    return () => {
+      if (ws) {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.addEventListener('open', () => ws.close());
+        } else {
+          ws.close();
+        }
+      }
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
       const timer = setTimeout(() => setQuotaCountdown(quotaCountdown - 1), 1000);
       return () => clearTimeout(timer);
@@ -85,29 +166,34 @@ export function SearchTabContent({
       let res;
       const currentQuery = queryOverride !== undefined ? queryOverride : searchQuery;
 
+      const token = localStorage.getItem('access_token');
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
       if (searchMode === "multimodal") {
         if (!imageFile) {
           throw new Error("검색을 위해 이미지를 붙여넣기 해주세요. (Ctrl+V / Cmd+V)");
         }
         const formData = new FormData();
         formData.append('image', imageFile);
-        formData.append('user_text', currentQuery || '비슷한 상품 찾아줘');
+        formData.append('user_text', currentQuery || 'find similiar product');
 
         res = await fetch('/api/multimodal', {
           method: 'POST',
+          headers: authHeaders,
           body: formData
         });
       } else {
         const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
         res = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ query: currentQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
         });
       }
 
       if (res.status === 429) {
         setQuotaCountdown(60);
+        setLoading(false);
         return;
       }
 
@@ -117,6 +203,11 @@ export function SearchTabContent({
       }
 
       const data = await res.json();
+
+      if (searchMode === "digging" && data.success && !data.results) {
+        // 검색이 백그라운드 태스크로 전환되었으므로 웹소켓 이벤트 수신 대기 (로딩 상태 유지)
+        return;
+      }
 
       if (isAppend) {
         // 더 보기: 기존 결과 뒤에 새 결과를 배열로 이어 붙임
@@ -130,10 +221,10 @@ export function SearchTabContent({
           setGeneratedImage(null);
         }
       }
+      setLoading(false);
     } catch (error: any) {
       console.error(error);
       alert(error.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -224,9 +315,13 @@ export function SearchTabContent({
     if (!user) return;
 
     try {
+      const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/items/manual', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           user_id: user.id,
           category: item.category || "WEB SEARCH",
@@ -247,6 +342,7 @@ export function SearchTabContent({
         created_at: new Date().toISOString(),
       };
       onItemsChange((prev) => [newItem, ...prev]);
+      await refreshItems();
 
       alert("피드에 저장되었습니다!");
       await refreshTaste();
@@ -441,7 +537,7 @@ export function SearchTabContent({
                       ? "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
                       : searchMode === "ai"
                       ? "떠오르는 스타일을 자유롭게 입력해보세요"
-                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능)"
+                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능 ex: similiar color)"
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -478,54 +574,90 @@ export function SearchTabContent({
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="min-h-[60vh] bg-gray-50/70 p-6 md:p-10 rounded-4xl border border-black/5 shadow-xl shadow-gray-200/60 items-center justify-center flex"
           >
-            {loading && searchResults.length === 0 ? (
-              <div className="flex justify-center flex-col items-center gap-4">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-medium text-gray-500 animate-pulse text-center">
-                  {searchMode === "digging"
-                    ? "검색 중..."
-                    : searchMode === "ai"
-                    ? "AI 검색 중... \n 10~15초 소요될 수 있어요"
-                    : "이미지 분석 중...\n 10~15초 소요될 수 있어요"}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {searchMode === "ai" && generatedImage && (
+            <div className="w-full flex flex-col space-y-8">
+              <AnimatePresence>
+                {loading && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm"
+                    key="loading-indicator"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex flex-col items-center justify-center gap-4 py-4 overflow-hidden"
                   >
-                    <span className="text-xs font-black tracking-widest uppercase text-purple-600 mb-4 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" /> Generated Vibe
-                    </span>
-                    <img
-                      src={generatedImage}
-                      alt="AI Generated Vibe"
-                      className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
-                    />
-                    <p className="text-xs text-gray-400 mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                    <Loader2 className="w-8 h-8 animate-spin text-black" />
+                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-bold text-gray-500 animate-pulse text-center">
+                      {searchResults.length > 0
+                        ? `분석 중... (현재까지 발견된 아이템: ${searchResults.length}개)`
+                        : searchMode === "digging"
+                        ? "검색 중..."
+                        : searchMode === "ai"
+                        ? "AI 검색 중... \n 10~15초 소요될 수 있어요"
+                        : "이미지 분석 중...\n 10~15초 소요될 수 있어요"}
+                    </p>
                   </motion.div>
                 )}
+              </AnimatePresence>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  <AnimatePresence>
-                    {searchResults.map((item, index) => {
-                      return (
-                        <SearchResultCard
-                          key={item.id}
-                          delay={index * 0.1}
-                          item={item}
-                          onClick={() => setSelectedItem(item)}
-                          onSave={handleSaveToFeed}
-                        />
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
+              {searchMode === "ai" && generatedImage && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm"
+                >
+                  <span className="text-xs font-black tracking-widest uppercase text-purple-600 mb-4 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" /> Generated Vibe
+                  </span>
+                  <img
+                    src={generatedImage}
+                    alt="AI Generated Vibe"
+                    className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
+                  />
+                  <p className="text-xs text-gray-400 mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                </motion.div>
+              )}
+
+              <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                <AnimatePresence mode="popLayout">
+                  {searchResults.map((item) => (
+                    <SearchResultCard
+                      key={item.id}
+                      delay={0}
+                      item={item}
+                      onClick={() => setSelectedItem(item)}
+                      onSave={handleSaveToFeed}
+                    />
+                  ))}
+
+                  {loading && Array.from({ length: Math.max(3, 6 - searchResults.length) }).map((_, i) => (
+                    <motion.div
+                      key={`skeleton-${i}`}
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3 }}
+                      className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 flex flex-col h-full min-h-[360px]"
+                    >
+                      <div className="aspect-square w-full bg-gray-100 animate-pulse relative">
+                        <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                          <Zap className="w-8 h-8 opacity-20" fill="currentColor" />
+                        </div>
+                      </div>
+                      <div className="p-5 flex flex-col flex-1 gap-4">
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gray-200 rounded-md w-3/4 animate-pulse" />
+                          <div className="h-4 bg-gray-200 rounded-md w-1/2 animate-pulse" />
+                        </div>
+                        <div className="h-3 bg-gray-100 rounded-md w-full animate-pulse mt-1" />
+                        <div className="mt-auto">
+                          <div className="h-10 bg-gray-50 rounded-xl animate-pulse" />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            </div>
             {searchResults.length > 0 && (
               <div className="flex justify-center pt-10">
                 <button

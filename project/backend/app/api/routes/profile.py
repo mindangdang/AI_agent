@@ -4,24 +4,28 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.services.crawling import DEFAULT_USER_ID
 from project.backend.app.services.taste import build_current_profile, build_summary_text
 from project.backend.Step2.preferance_llm import analyze_vibe
+from project.backend.app.api.routes.auth import get_current_user
 
 
 router = APIRouter()
 
 
 @router.post("/generate-taste")
-async def generate_taste_profile(repos: Repositories = Depends(get_repos)):
+async def generate_taste_profile(
+    repos: Repositories = Depends(get_repos),
+    current_user: dict = Depends(get_current_user)
+):
     try:
-        count = await repos.saved_posts.count_by_user_id(DEFAULT_USER_ID)
+        user_id = current_user.get("sub")
+        count = await repos.saved_posts.count_by_user_id(str(user_id))
         if count == 0:
             return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
 
         existing_summary = await repos.taste_profile.get_latest_summary()
         current_profile = build_current_profile(existing_summary)
-        summary_dict = await analyze_vibe(user_id=1, current_profile=current_profile)
+        summary_dict = await analyze_vibe(user_id=str(user_id), current_profile=current_profile)
 
         if not summary_dict:
             return {"success": False, "message": "취향 분석에 실패했습니다."}
@@ -44,7 +48,10 @@ async def generate_taste_profile(repos: Repositories = Depends(get_repos)):
 
 
 @router.get("/taste")
-async def get_taste(repos: Repositories = Depends(get_repos)):
+async def get_taste(
+    repos: Repositories = Depends(get_repos),
+    current_user: dict = Depends(get_current_user)
+):
     try:
         return await repos.taste_profile.get_profile()
     except Exception as exc:

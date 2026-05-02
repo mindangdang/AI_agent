@@ -2,6 +2,7 @@ import asyncio
 import html
 import os
 import uuid
+import json
 from typing import Optional
 
 from fastapi import FastAPI
@@ -17,9 +18,6 @@ from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
 
 
-DEFAULT_USER_ID = "1"
-
-
 async def background_crawl_and_save(
     app: FastAPI,
     item_id: int,
@@ -28,7 +26,9 @@ async def background_crawl_and_save(
     session_id: Optional[str],
     rapid_api_key: Optional[str],
 ):
-    print(f"[백그라운드] 작업 시작: {post_url}")
+    print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {item_id})")
+    manager = getattr(app.state, "websocket_manager", None)
+
     try:
         extracted_items = []
         is_instagram = "instagram.com" in post_url.lower()
@@ -37,27 +37,58 @@ async def background_crawl_and_save(
             crawl_result = await _crawl_instagram_post(post_url, session_id, rapid_api_key)
             if not crawl_result or crawl_result.get("error"):
                 error_message = crawl_result.get("error") if crawl_result else "크롤링 결과 없음"
-                print(f"[백그라운드] 크롤링 실패: {error_message}")
-                return
+                raise RuntimeError(f"인스타그램 크롤링 실패: {error_message}")
 
             extracted_items = await _extract_instagram_items(crawl_result)
         else:
             extracted_items = await _extract_product_items(post_url)
 
         if not extracted_items:
-            raise RuntimeError("추출된 데이터가 없습니다.")
+            raise RuntimeError("아이템 정보를 추출하지 못했습니다.")
 
         _mark_feed_add_items(extracted_items)
 
         async with app.state.db_pool.connection() as conn:
             repos = get_repositories(conn)
             await repos.saved_posts.delete_by_id(item_id)
-
             await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
             await conn.commit()
             print("[백그라운드] 작업 및 DB 저장 완료")
+
+            # 저장된 최신 아이템 정보를 다시 조회하여 클라이언트에 전송
+            all_items = await repos.saved_posts.list_feed_items(user_id)
+            new_items = [item for item in all_items if item.get("url") == post_url or item.get("source_url") == post_url]
+            if not new_items:
+                print("[백그라운드] DB에서 새 아이템을 찾을 수 없습니다.")
+
+        if manager:
+            payload = {
+                "type": "CRAWL_SUCCESS",
+                "placeholder_id": item_id,
+                "items": new_items,
+            }
+            await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+            print("[백그라운드] 웹소켓 메시지 전송 완료")
+
     except Exception as exc:
         print(f"[백그라운드] 전체 프로세스 에러: {exc}")
+        # 에러 발생 시, 임시로 생성된 아이템을 DB에서 삭제
+        try:
+            async with app.state.db_pool.connection() as conn:
+                repos = get_repositories(conn)
+                await repos.saved_posts.delete_by_id(item_id)
+                await conn.commit()
+                print(f"[백그라운드] 에러로 인해 임시 아이템({item_id}) 삭제 완료")
+        except Exception as db_exc:
+            print(f"[백그라운드] 임시 아이템({item_id}) 삭제 실패: {db_exc}")
+
+        if manager:
+            payload = {
+                "type": "CRAWL_ERROR",
+                "placeholder_id": item_id,
+                "message": "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
+            }
+            await manager.broadcast_to_user(user_id, json.dumps(payload))
 
 
 def _mark_feed_add_items(items: list[dict]) -> None:

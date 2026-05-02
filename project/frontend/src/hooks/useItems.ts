@@ -13,7 +13,11 @@ export function useItems(user: AppUser | null) {
     }
 
     try {
-      const res = await fetch(`/api/items?user_id=${user.id}`, { cache: 'no-store' });
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/items?user_id=${user.id}`, { 
+        cache: 'no-store',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
       if (!res.ok) {
         throw new Error(`Failed to fetch items: ${res.status}`);

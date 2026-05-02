@@ -80,7 +80,7 @@ class SavedPostsRepository:
                     summary_text,
                     created_at
                 FROM saved_posts
-                WHERE user_id = %s OR user_id = 'default_user'
+                WHERE user_id = %s
                 ORDER BY created_at DESC
                 """,
                 (user_id,),

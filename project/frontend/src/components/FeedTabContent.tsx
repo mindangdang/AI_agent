@@ -102,11 +102,60 @@ export function FeedTabContent({
     return filteredItems.filter((item) => !item.sub_category);
   }, [filteredItems, currentFolder, shouldGroupItems]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
+    let ws: WebSocket;
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === "CRAWL_SUCCESS") {
+            console.log("[웹소켓] CRAWL_SUCCESS 메시지 수신: ", data);
+            // 웹소켓으로부터 최종 아이템 데이터를 받으면, 기존의 임시 아이템을 제거하고 새 아이템으로 교체합니다.
+            onItemsChange((prev) => {
+              // placeholder_id와 일치하는 임시 아이템을 찾아서 제거합니다.
+              const filtered = prev.filter(item => item.id !== data.placeholder_id);
+              console.log("id 일치여부 확인: ", prev.map(item => ({ id: item.id, placeholder_id: data.placeholder_id })));
+              // 새로 받은 최종 아이템(data.items)을 배열의 맨 앞에 추가합니다.
+              return [...(data.items || []), ...filtered];
+            });
+            // 전체 아이템을 다시 불러올 필요 없이, 취향 분석만 새로고침합니다.
+            setCurrentFolder((prev) => prev === 'PROCESSING ' ? null : prev);
+            void refreshTaste();
+          } else if (data.type === "CRAWL_ERROR") {
+            alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
+            // 에러 발생 시, 해당 임시 아이템을 피드에서 제거합니다.
+            onItemsChange((prev) => prev.filter(item => item.id !== data.placeholder_id));
+          }
+        } catch (err) {
+          console.error("웹소켓 메시지 파싱 오류:", err);
+        }
+      };
+    } catch (err) {
+      console.error("웹소켓 연결 에러:", err);
+    }
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, [user, onItemsChange, refreshTaste]);
+
   const addItemMutation = useMutation({
-    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
+    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: string | number }) => {
+      const token = localStorage.getItem('access_token');
       const res = await fetch('/api/extract-url', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
       });
 
@@ -120,40 +169,17 @@ export function FeedTabContent({
         data: await res.json(),
       };
     },
-    onSuccess: ({ nextUrl, data }) => {
-      setIsAddButtonSuccess(true);
-      if (addSuccessTimeout.current) {
-        window.clearTimeout(addSuccessTimeout.current);
+    onSuccess: ({ data }) => {
+      // 백그라운드 작업이 시작되면, 백엔드는 임시 아이템 정보를 응답으로 보내줍니다.
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        // 이 임시 아이템을 UI에 먼저 표시하여 사용자에게 작업이 진행 중임을 알립니다.
+        onItemsChange((prev) => [...data.data, ...prev]);
       }
-      addSuccessTimeout.current = window.setTimeout(() => {
-        setIsAddButtonSuccess(false);
-        addSuccessTimeout.current = null;
-      }, 1000);
-
-      if (data.success && data.status === 'processing') {
-        alert(`✨ ${data.message}`);
-      } else if (data.success && data.data && Array.isArray(data.data)) {
-        const newItems = data.data.map((item: any, index: number) => ({
-          id: Date.now() + index,
-          url: nextUrl,
-          category: item.category || 'General',
-          sub_category: item.sub_category || '',
-          facts: { ...(typeof item.facts === 'object' && item.facts ? item.facts : {}), _source: 'feed_add' },
-          recommend: item.recommend || 'Extracted',
-          image_url: item.image_url || '',
-          created_at: new Date().toISOString(),
-          summary_text: item.summary_text || ''
-        }));
-        onItemsChange((prev) => [...newItems, ...prev]);
-      }
-
+      // 입력 필드를 초기화합니다.
       setNewUrl("");
       setSessionId("");
-
-      window.setTimeout(() => {
-        void refreshItems();
-        void refreshTaste();
-      }, 3000);
+      // 여기서는 refreshItems()를 호출하지 않습니다.
+      // 최종 데이터는 웹소켓을 통해 받아와 상태를 업데이트할 것이기 때문입니다.
     },
     onError: (error: Error) => {
       console.error(error);
@@ -162,8 +188,12 @@ export function FeedTabContent({
   });
 
   const deleteItemMutation = useMutation({
-    mutationFn: async ({ id, userId }: { id: number; userId: number }) => {
-      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { method: 'DELETE' });
+    mutationFn: async ({ id, userId }: { id: number; userId: string | number }) => {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
       if (!res.ok) {
         throw new Error('Failed to delete item');
