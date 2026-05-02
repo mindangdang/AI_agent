@@ -37,7 +37,7 @@ export function FeedTabContent({
 }: FeedTabContentProps) {
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
@@ -65,42 +65,37 @@ export function FeedTabContent({
   const isFeedAddItem = (item: SavedItem) => parseItemFacts(item)?._source === 'feed_add';
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
   const categories = useMemo(
-    () => {
-      const itemCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean);
-      const visibleCategories = itemCategories.filter((category) => {
-        const normalizedCategory = category.trim().toUpperCase();
-        return normalizedCategory !== 'PROCESSING' && normalizedCategory !== 'PRODUCT';
-      });
-
-      return ['All', 'PRODUCT', ...visibleCategories, 'PROCESSING'];
-    },
+    () => ['All', ...Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[]],
     [menuItems]
   );
   const filteredItems = useMemo(
     () => (
       selectedCategory === 'All'
         ? items
-        : menuItems.filter((item) => item.category === selectedCategory)
+        : items.filter((item) => item.category === selectedCategory)
     ),
-    [items, menuItems, selectedCategory]
+    [items, selectedCategory]
   );
-  const shouldGroupItems = selectedCategory.toUpperCase() === 'PRODUCT';
 
   const folders = useMemo(() => {
-    if (!shouldGroupItems) return [];
-
     const subs = new Set<string>();
     filteredItems.forEach((item) => {
       if (item.sub_category) subs.add(item.sub_category);
     });
     return Array.from(subs);
-  }, [filteredItems, shouldGroupItems]);
+  }, [filteredItems]);
 
   const itemsToDisplay = useMemo(() => {
-    if (!shouldGroupItems) return filteredItems;
     if (currentFolder) return filteredItems.filter((item) => item.sub_category === currentFolder);
     return filteredItems.filter((item) => !item.sub_category);
-  }, [filteredItems, currentFolder, shouldGroupItems]);
+  }, [filteredItems, currentFolder]);
+
+  useEffect(() => {
+    if (!categories.includes(selectedCategory) && categories.length > 0) {
+      setSelectedCategory('All');
+      setCurrentFolder(null);
+    }
+  }, [categories, selectedCategory]);
 
   useEffect(() => {
     if (!user) return;
@@ -303,7 +298,7 @@ export function FeedTabContent({
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch"
           >
-            {shouldGroupItems && currentFolder && (
+            {currentFolder && (
               <div className="col-span-full mb-5 flex items-center gap-4 border-b border-black/20 pb-2">
                 <h3 className="pl-2 text-xl font-bold uppercase tracking-tight text-gray-800">{currentFolder}</h3>
                 <button
@@ -315,7 +310,7 @@ export function FeedTabContent({
               </div>
             )}
 
-            {shouldGroupItems && !currentFolder &&
+            {!currentFolder &&
               folders.map((folder) => (
                 <motion.div
                   layout
