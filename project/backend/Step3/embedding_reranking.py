@@ -50,7 +50,7 @@ class FashionSiglipReRankingPipeline:
 
     @torch.no_grad()
     def get_image_vector(self, img: Image.Image, category: str) -> list[float]:
-        """단일 이미지와 카테고리를 받아 Vibe Vector를 반환합니다. (DB 저장용)"""
+        """단일 이미지와 카테고리를 받아 Image Vector를 반환합니다. (DB 저장용)"""
         clean_img = self.preprocess_image(img)
         
         image_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)
@@ -106,97 +106,46 @@ class FashionSiglipReRankingPipeline:
         return F.cosine_similarity(vec1, vec2, dim=1).item()
 
     @torch.no_grad()
-    def rerank_search_results(
-        self, 
-        search_results: list[dict], 
-        user_taste_vector: torch.Tensor, 
-        query_text: str, 
+    def evaluate_single_item(
+        self,
+        item: dict,
+        user_taste_vector: torch.Tensor,
+        query_vector: torch.Tensor,
         semantic_thresh: float = 0.10,
         aesthetic_thresh: float = 0.0
-    ) -> list[dict]:
-        """In-Memory 객체를 소비하며 Dual 필터링을 수행합니다. 배치 처리를 통해 속도 개선."""
-        if not search_results:
-            return []
+    ) -> dict | None:
+        """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
+        raw_img = item.pop("image_obj", None)
+        if raw_img is None:
+            return None
             
-        print(f"{len(search_results)}개 상품 2-Stage 필터링 및 리랭킹 시작...")
-        
-        # 1. 쿼리 벡터 추출 (Stage 1 필터링 용도)
-        query_vector = self.encode_text(query_text)
-        
-        # 배치 처리를 위한 리스트 준비
-        images = []
-        categories = []
-        items_with_images = [] # 전처리 성공한 아이템만 저장
-        
-        def _process_item(item):
-            try:
-                # 메모리에서 이미지 객체를 꺼내고 딕셔너리에서 연결을 끊음 (RAM 확보)
-                raw_img = item.pop("image_obj", None)
-                if raw_img is None:
-                    return None
-                
-                clean_img = self.preprocess_image(raw_img)
-                cat = item.get("sub_category") or "PRODUCT"
-                return clean_img, cat, item
-            except Exception as e:
-                print(f"'{item.get('summary_text', 'Unknown')}' 전처리 에러: {e}")
+        try:
+            clean_img = self.preprocess_image(raw_img)
+            cat = item.get("sub_category") or "PRODUCT"
+            
+            # 1. 이미지 및 카테고리 벡터 추출
+            img_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)
+            if self.device == "cuda":
+                img_input = img_input.to(torch.bfloat16)
+            raw_img_vector = F.normalize(self.model.encode_image(img_input), p=2, dim=1)
+            
+            cat_input = self.tokenizer([cat]).to(self.device)
+            cat_vector = F.normalize(self.model.encode_text(cat_input), p=2, dim=1)
+            
+            # 2. Stage 1 & 2 스코어 일괄 계산
+            semantic_score = F.cosine_similarity(query_vector, raw_img_vector).item()
+            image_vector = raw_img_vector - (self.lambda_weight * cat_vector)
+            pure_image_vector = F.normalize(image_vector, p=2, dim=1)
+            aesthetic_score = F.cosine_similarity(user_taste_vector, pure_image_vector).item()
+            clean_img.close()
+            
+            if semantic_score < semantic_thresh or aesthetic_score < aesthetic_thresh:
                 return None
-
-        # 시스템 과부하를 막기 위해 최대 8개의 스레드만 사용하여 In-Memory 이미지 병렬 전처리
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            results = executor.map(_process_item, search_results)
-            
-        for res in results:
-            if res is not None:
-                images.append(res[0])
-                categories.append(res[1])
-                items_with_images.append(res[2])
-        
-        if not images:
-            return []
-        
-        # --- 모든 계산을 배치로 한번에 처리 ---
-        
-        # 2. 배치로 이미지 벡터 추출
-        img_inputs = torch.stack([self.preprocess(img) for img in images]).to(self.device)
-        if self.device == "cuda":
-            img_inputs = img_inputs.to(torch.bfloat16)
-        raw_img_vectors = F.normalize(self.model.encode_image(img_inputs), p=2, dim=1)
-        
-        # 3. 배치로 카테고리 벡터 추출
-        cat_inputs = self.tokenizer(categories).to(self.device)
-        cat_vectors = F.normalize(self.model.encode_text(cat_inputs), p=2, dim=1)
-        
-        # 4. [Stage 1] Semantic 스코어 일괄 계산
-        # (1, D) vs (N, D) -> (N,)
-        semantic_scores = F.cosine_similarity(query_vector, raw_img_vectors)
-        
-        # 5. [Stage 2] Aesthetic 스코어 일괄 계산
-        # (N, D) - (N, D) -> (N, D)
-        image_vectors = raw_img_vectors - (self.lambda_weight * cat_vectors)
-        pure_image_vectors = F.normalize(image_vectors, p=2, dim=1)
-        # (1, D) vs (N, D) -> (N,)
-        aesthetic_scores = F.cosine_similarity(user_taste_vector, pure_image_vectors)
-
-        print(f"쿼리와의 유사도 : {semantic_scores}")
-        print(f"유저 취향과의 유사도 : {aesthetic_scores}")
-        
-        # 6. 결과 취합
-        valid_results = []
-        for i, item in enumerate(items_with_images):
-            # 현재는 필터링 없이 모든 결과에 점수를 매김
-            # if semantic_scores[i] < semantic_thresh or aesthetic_scores[i] < aesthetic_thresh:
-            #     continue
-            item["semantic_score"] = round(semantic_scores[i].item(), 4)
-            item["aesthetic_score"] = round(aesthetic_scores[i].item(), 4)
-            valid_results.append(item)
-        
-        # 메모리 정리
-        for img in images:
-            img.close()
-        del images, img_inputs, raw_img_vectors, cat_inputs, cat_vectors, image_vectors, pure_image_vectors, semantic_scores, aesthetic_scores
-        gc.collect()
-        if self.device == "cuda":
-            torch.cuda.empty_cache()
                 
-        return sorted(valid_results, key=lambda x: x["aesthetic_score"], reverse=True)
+            item["semantic_score"] = round(semantic_score, 4)
+            item["aesthetic_score"] = round(aesthetic_score, 4)
+            return item
+        except Exception as e:
+            print(f"'{item.get('summary_text', 'Unknown')}' 단일 평가 에러: {e}")
+            return None
+

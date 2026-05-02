@@ -7,6 +7,9 @@ import asyncio
 from project.backend.app.core.settings import load_backend_env
 from project.backend.app.core.resilience import with_llm_resilience
 from fastapi import WebSocket
+import httpx
+import uuid
+
 
 
 
@@ -83,3 +86,52 @@ async def analyze_description_with_gemini(description: str) -> dict:
         "key_details": data.key_details,
         "sub_category": data.sub_category
     }
+
+domain_map = {
+        "musinsa.com": "무신사",
+        "m.bunjang.co.kr" : "번개장터",
+        "fruitsfamily.com": "후루츠패밀리",
+        "zara.com": "자라",
+        "instagram.com": "인스타그램"
+    }
+
+async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
+    product_hierarchy_query = "(> products)"
+    exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
+    final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
+    
+    params = {
+        "engine": "google",
+        "q": final_query,
+        "api_key": serp_api_key,
+        "num": 5, 
+        "tbm": "isch",
+        "start": (current_page - 1) * 5,
+        "gl": "kr",
+        "hl": "ko"
+    }
+    
+    try:
+        response = await client.get("https://serpapi.com/search", params=params)
+        response.raise_for_status()
+        items = response.json().get("images_results", [])
+        print(f"[{site_name}] 검색 성공")
+        
+        return [{
+            "id": str(uuid.uuid4()),
+            "category": "PRODUCT",
+            "sub_category": "PRODUCT",
+            "recommend": f"{site_name}에서 발견한 아이템",
+            "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
+            "url": item.get("link", ""),
+            "summary_text": item.get("title", "상품명 없음"),
+            "facts": {
+                "title": item.get("title", "상품명 없음"),
+                "Price": item.get("price") or item.get("snippet") or "가격 미상",
+                "Shop": site_name,
+            },
+        } for item in items]
+
+    except Exception as e:
+        print(f"[{domain}] 검색 실패: {e}")
+        return []
