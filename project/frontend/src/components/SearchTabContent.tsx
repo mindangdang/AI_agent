@@ -91,7 +91,7 @@ export function SearchTabContent({
         }
         const formData = new FormData();
         formData.append('image', imageFile);
-        formData.append('user_text', currentQuery || '비슷한 상품 찾아줘');
+        formData.append('user_text', currentQuery || 'find similiar product');
 
         res = await fetch('/api/multimodal', {
           method: 'POST',
@@ -441,7 +441,7 @@ export function SearchTabContent({
                       ? "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
                       : searchMode === "ai"
                       ? "떠오르는 스타일을 자유롭게 입력해보세요"
-                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능)"
+                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능 ex: similiar color)"
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
