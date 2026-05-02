@@ -41,7 +41,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
     <>
       <Tabs.Root
         value={currentTab}
-        onValueChange={(value) => setCurrentTab(value as 'feed' | 'search' | 'profile')}
+        onValueChange={(value: string) => setCurrentTab(value as 'feed' | 'search' | 'profile')}
         orientation="vertical"
         className="relative h-screen overflow-hidden bg-white text-black font-sans selection:bg-yellow-300 selection:text-black"
       >
