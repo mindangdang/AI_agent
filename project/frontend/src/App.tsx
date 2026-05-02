@@ -160,6 +160,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
               <Tabs.Content value="search" forceMount className="w-full">
                 <SearchTabContent
                   onItemsChange={setItems}
+                  refreshItems={refreshItems}
                   refreshTaste={refreshTaste}
                   user={user}
                 />
