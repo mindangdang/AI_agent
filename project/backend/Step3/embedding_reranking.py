@@ -39,6 +39,21 @@ class FashionSiglipReRankingPipeline:
         self.model.eval()
         self.model = torch.compile(self.model)
         
+        print("모델 웜업 진행 중 (Dummy 데이터 컴파일 수행)...")
+        try:
+            with torch.no_grad():
+                dummy_img = Image.new("RGB", (224, 224), "WHITE")
+                dummy_img_input = self.preprocess(dummy_img).unsqueeze(0).to(self.device)
+                if self.device == "cuda":
+                    dummy_img_input = dummy_img_input.to(torch.bfloat16)
+                dummy_text_input = self.tokenizer(["warmup"]).to(self.device)
+                
+                self.model.encode_image(dummy_img_input)
+                self.model.encode_text(dummy_text_input)
+            print("모델 웜업 완료.")
+        except Exception as e:
+            print(f"모델 웜업 중 에러 발생 (무시됨): {e}")
+
         self._is_initialized = True
         print(f"시스템 초기화 완료. (동작 환경: {self.device})")
 
@@ -122,6 +137,7 @@ class FashionSiglipReRankingPipeline:
             
         try:
             clean_img = self.preprocess_image(raw_img)
+            raw_img.close()
             cat = item.get("sub_category") or "PRODUCT"
             
             # 1. 이미지 및 카테고리 벡터 추출
@@ -129,7 +145,7 @@ class FashionSiglipReRankingPipeline:
             if self.device == "cuda":
                 img_input = img_input.to(torch.bfloat16)
             raw_img_vector = F.normalize(self.model.encode_image(img_input), p=2, dim=1)
-            
+
             cat_input = self.tokenizer([cat]).to(self.device)
             cat_vector = F.normalize(self.model.encode_text(cat_input), p=2, dim=1)
             
