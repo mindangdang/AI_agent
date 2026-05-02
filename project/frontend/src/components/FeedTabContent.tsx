@@ -255,8 +255,8 @@ export function FeedTabContent({
             className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch"
           >
             {shouldGroupItems && currentFolder && (
-              <div className="col-span-full mb-5 flex items-center gap-4 border-b border-gray-200 pb-2">
-                <h3 className="text-2xl font-bold uppercase tracking-tight text-gray-800">{currentFolder}</h3>
+              <div className="col-span-full mb-5 flex items-center gap-4 border-b border-black/60 pb-2">
+                <h3 className="pl-2 text-xl font-bold uppercase tracking-tight text-gray-800">{currentFolder}</h3>
                 <button
                   onClick={() => setCurrentFolder(null)}
                   className="ml-auto flex items-center px-2 py-2 hover:bg-gray-200 rounded-full text-xs font-black tracking-widest transition-colors"
@@ -272,13 +272,13 @@ export function FeedTabContent({
                   layout
                   key={`folder-${folder}`}
                   onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-[4/4.6] flex-col items-center justify-center overflow-hidden rounded-3xl border border-black/40 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
+                  className="group relative flex aspect-[4/4.6] flex-col items-center justify-center overflow-hidden rounded-3xl border border-black/60 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
                 >
                   <h3 className="absolute left-5 top-5 pr-5 text-sm font-bold text-black group-hover:text-black tracking-widest line-clamp-2">
                     {folder}
                   </h3>
-                  <p className="absolute bottom-5 right-5 text-xl font-extralight text-black">
-                    {filteredItems.filter((i) => i.sub_category === folder).length} items
+                  <p className="absolute bottom-5 right-5 text-xl font-medium text-black">
+                    [ {filteredItems.filter((i) => i.sub_category === folder).length} ]
                   </p>
                 </motion.div>
               ))}
@@ -298,7 +298,7 @@ export function FeedTabContent({
         {items.length === 0 && !addItemMutation.isPending && (
           <div className="text-center py-32 h-full flex flex-col justify-center itemms-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
             <h3 className="text-2xl font-black tracking-tight mb-2">POSE!</h3>
-            <p className="text-gray-500 font-medium">프로덕트 링크를 넣고 나만의 바이브를 수집하세요.</p>
+            <p className="text-gray-500 font-medium">아이템 링크를 넣고 나만의 바이브를 수집하세요.</p>
           </div>
         )}
       </div>
