@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import {
   Grid,
   Menu,
+  LogOut,
   Search,
   User,
 } from 'lucide-react';
+import { GoogleLoginButton } from './components/GoogleLoginButton';
 import { FeedTabContent } from './components/FeedTabContent';
 import { ItemDetailDialog } from './components/ItemDetailDialog';
 import { NavItem } from './components/NavItem';
@@ -18,12 +20,36 @@ import type { SavedItem } from './types/item';
 import type { AppUser } from './types/user';
 
 export default function App() {
-  const [user] = useState<AppUser>({ id: 1, username: 'guest' });
+  const [user, setUser] = useState<AppUser | null>(null);
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
   const [isNavExpanded, setIsNavExpanded] = useState(true);
-  const { items, setItems, refreshItems } = useItems(user);
-  const { taste, setTaste, refreshTaste } = useTaste(user);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const { items, setItems, refreshItems } = useItems(user as AppUser);
+  const { taste, setTaste, refreshTaste } = useTaste(user as AppUser);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    setIsLogoutModalOpen(false);
+    setUser(null);
+  };
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 font-sans">
+        <div className="flex flex-col items-center gap-8 p-10 bg-white rounded-3xl shadow-xl border border-gray-100">
+          <div className="text-center space-y-2">
+            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-500 via-yellow-400 to-purple-500">POSE!</h1>
+            <p className="text-gray-500 font-medium">당신의 취향에서 시작되는 새로운 발견</p>
+          </div>
+          <GoogleLoginButton
+            onSuccess={(userData) => setUser(userData)}
+            onError={(msg) => alert(msg)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -86,20 +112,41 @@ export default function App() {
               />
             </Tabs.List>
 
-            <div className="mb-6 flex h-12 w-full items-center overflow-hidden rounded-xl text-left text-white/80">
-              <span className="flex h-12 w-17 shrink-0 items-center justify-center">
-                <span className="h-8 w-8 rounded-full bg-linear-to-tr from-blue-500 via-yellow-300 to-purple-500 p-0.5">
-                  <span className="block h-full w-full rounded-full bg-black" />
+            <div className="mb-4 flex flex-col gap-1 w-full">
+              <div className="flex h-12 w-full items-center overflow-hidden rounded-xl text-left text-white/80">
+                <span className="flex h-12 w-17 shrink-0 items-center justify-center">
+                  <span className="h-8 w-8 rounded-full bg-linear-to-tr from-blue-500 via-yellow-300 to-purple-500 p-0.5">
+                    <span className="block h-full w-full rounded-full bg-black" />
+                  </span>
                 </span>
-              </span>
-              <span
-                className={[
-                  "block overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                  isNavExpanded ? "max-w-28 translate-x-0 opacity-100 delay-75" : "max-w-0 -translate-x-1 opacity-0",
-                ].join(" ")}
+                <span
+                  className={[
+                    "block overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    isNavExpanded ? "max-w-28 translate-x-0 opacity-100 delay-75" : "max-w-0 -translate-x-1 opacity-0",
+                  ].join(" ")}
+                >
+                  {/* 백엔드에서 넘겨주는 이름(name)을 우선적으로 사용하도록 처리 */}
+                  @{user.name || user.username || 'user'}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setIsLogoutModalOpen(true)}
+                title="로그아웃"
+                className="flex h-10 w-full items-center overflow-hidden rounded-xl text-left text-red-400/80 transition-colors hover:bg-white/10 hover:text-red-400"
               >
-                @{user.username}
-              </span>
+                <span className="flex h-10 w-17 shrink-0 items-center justify-center">
+                  <LogOut className="h-5 w-5" />
+                </span>
+                <span
+                  className={[
+                    "block overflow-hidden whitespace-nowrap text-xs font-bold transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    isNavExpanded ? "max-w-28 translate-x-0 opacity-100 delay-75" : "max-w-0 -translate-x-1 opacity-0",
+                  ].join(" ")}
+                >
+                  로그아웃
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -156,6 +203,37 @@ export default function App() {
           if (!open) setSelectedItem(null);
         }}
       />
+
+      {/* 로그아웃 확인 모달 */}
+      <AnimatePresence>
+        {isLogoutModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <h3 className="mb-2 text-center text-lg font-black text-gray-900">로그아웃</h3>
+              <p className="mb-6 text-center text-sm font-medium text-gray-500">정말 로그아웃 하시겠습니까?</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsLogoutModalOpen(false)}
+                  className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-bold text-white transition-colors hover:bg-red-600"
+                >
+                  로그아웃
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
