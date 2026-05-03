@@ -34,7 +34,6 @@ from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 
-# semantic: 0.0274 / Aesthetic: 0.5170
 load_backend_env()
 LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 

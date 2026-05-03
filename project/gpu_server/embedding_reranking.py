@@ -125,7 +125,7 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_vector: torch.Tensor,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0.10,
+        semantic_thresh: float = 0.10, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170
         aesthetic_thresh: float = 0.0
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
