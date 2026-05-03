@@ -2,16 +2,16 @@ import os
 from PIL import Image
 import io
 import httpx
-from fastapi import FastAPI
+from fastapi import APIRouter
 from project.gpu_server.embedding_reranking import FashionSiglipReRankingPipeline
 from project.gpu_server.schemas import EmbedRequest, TasteVectorRequest, EncodeTextRequest, EvaluateRequest
 from project.backend.app.core.settings import IMAGE_DIR
 import torch
     
-app = FastAPI(title="SigLIP Inference Server")
+router = APIRouter()
 pipeline = FashionSiglipReRankingPipeline()
 
-@app.post("/embedding")
+@router.post("/embedding")
 async def embed_image(request: EmbedRequest):
     try:
         image_url = request.image_url
@@ -35,7 +35,7 @@ async def embed_image(request: EmbedRequest):
         print(f"벡터 추출 에러: {e}")
     return {"vector": None}
 
-@app.post("/build_taste_vector")
+@router.post("/build_taste_vector")
 async def build_taste_vector(request: TasteVectorRequest):
     try:
         taste_vector = pipeline.build_user_taste_vector(request.image_vectors)
@@ -45,7 +45,7 @@ async def build_taste_vector(request: TasteVectorRequest):
         print(f"취향 벡터 합성 에러: {e}")
     return {"vector": None}
 
-@app.post("/encode_text")
+@router.post("/encode_text")
 async def encode_text(request: EncodeTextRequest):
     try:
         return {"vector": pipeline.encode_text(request.text).cpu().tolist()}
@@ -53,7 +53,7 @@ async def encode_text(request: EncodeTextRequest):
         print(f"텍스트 인코딩 에러: {e}")
     return {"vector": None}
 
-@app.post("/evaluate_single_item")
+@router.post("/evaluate_single_item")
 async def evaluate_single_item_endpoint(request: EvaluateRequest):
     try:
         user_taste_tensor = torch.tensor(request.user_taste_vector, device=pipeline.device)

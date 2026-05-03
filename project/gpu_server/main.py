@@ -1,12 +1,12 @@
 from fastapi import FastAPI
-from project.gpu_server.routes import routes
+from project.gpu_server.routes import router
 
 app = FastAPI(
     title="POSE GPU Server",
     description="이미지 임베딩 추출 및 리랭킹을 처리하는 GPU 전용 API 서버입니다.",
     version="1.0.0"
 )
-app.include_router(routes)
+app.include_router(router)
 
 @app.get("/health", tags=["health"])
 async def health_check():
