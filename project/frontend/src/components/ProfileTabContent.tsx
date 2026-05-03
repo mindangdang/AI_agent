@@ -490,7 +490,14 @@ export function ProfileTabContent({
     setIsGeneratingTaste(true);
     onTasteChange('');
     try {
-      const res = await fetch('/api/generate-taste', { method: 'POST' });
+      const token = localStorage.getItem('access_token');
+      const res = await fetch('/api/generate-taste', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
       const data = await res.json();
 
       if (data.success) {
