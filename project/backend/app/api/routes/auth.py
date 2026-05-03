@@ -80,3 +80,34 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+@router.get("/`auth/me`")
+async def get_current_user_info(current_user: dict = Depends(get_current_user), conn=Depends(get_db_connection)):
+    """현재 로그인한 사용자의 정보를 반환합니다."""
+    try:
+        user_id: str = current_user.get("sub")
+        
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                "SELECT id, email, name, profile_image FROM users WHERE id = %s",
+                (user_id,)
+            )
+            user = await cur.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # 프론트엔드가 사용하는 AppUser 형태의 데이터 반환
+        user_data = {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "profile_image": user["profile_image"],
+            "username": user["name"]  # username도 추가 (프론트엔드에서 사용)
+        }
+        return {"user": user_data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching user info: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
