@@ -71,7 +71,7 @@ SYSTEM_PROMPT = """
 # ==========================================
 # 4. 데이터 로드 및 포맷팅 (비동기화 및 통합)
 # ==========================================
-async def fetch_user_data_from_neon(user_id: int):
+async def fetch_user_data_from_neon(user_id: str):
     try:
         async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
@@ -82,7 +82,7 @@ async def fetch_user_data_from_neon(user_id: int):
                     ORDER BY created_at DESC
                     LIMIT 10;
                 """
-                await cur.execute(query, (str(user_id),))
+                await cur.execute(query, (user_id,))
                 return await cur.fetchall()
     except Exception as e:
         print(f"DB 조회 실패: {e}")
@@ -134,7 +134,7 @@ def format_data_for_prompt(item: dict) -> str:
 # 5. LLM 분석 실행 함수
 # ==========================================
 @with_llm_resilience(fallback_default=None)
-async def analyze_vibe(user_id: int, current_profile: dict):
+async def analyze_vibe(user_id: str, current_profile: dict):
     raw_items = await fetch_user_data_from_neon(user_id)
     if not raw_items:
         return None

@@ -23,7 +23,7 @@ async def generate_taste_profile(
         if count == 0:
             return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
 
-        existing_summary = await repos.taste_profile.get_latest_summary()
+        existing_summary = await repos.taste_profile.get_latest_summary(str(user_id))
         current_profile = build_current_profile(existing_summary)
         summary_dict = await analyze_vibe(user_id=str(user_id), current_profile=current_profile)
 
@@ -33,7 +33,7 @@ async def generate_taste_profile(
         final_summary_text = build_summary_text(summary_dict)
 
         try:
-            await repos.taste_profile.upsert_summary(final_summary_text)
+            await repos.taste_profile.upsert_summary(final_summary_text,str(user_id))
             print(f"DB 저장 성공: {final_summary_text[:30]}...")
         except Exception as db_exc:
             await repos.taste_profile.conn.rollback()
@@ -53,7 +53,8 @@ async def get_taste(
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        return await repos.taste_profile.get_profile()
+        user_id = current_user.get("sub")
+        return await repos.taste_profile.get_profile(str(user_id))
     except Exception as exc:
         print(f"취향 프로필 조회 에러: {exc}")
         return {"summary": ""}
