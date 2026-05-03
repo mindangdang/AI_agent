@@ -10,9 +10,9 @@ from psycopg.rows import dict_row
 class SavedPostsRepository:
     conn: Any
 
-    async def delete_by_id(self, item_id: int) -> None:
+    async def delete_by_id(self, item_id: int, user_id: str) -> None:
         async with self.conn.cursor() as cursor:
-            await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
+            await cursor.execute("DELETE FROM saved_posts WHERE id = %s AND user_id = %s", (item_id, user_id))
 
     async def create_processing_item(self, user_id: str, post_url: str) -> int:
         async with self.conn.cursor() as cursor:
@@ -75,7 +75,7 @@ class SavedPostsRepository:
                     category,
                     sub_category,
                     facts,
-                    recommend as recommend,
+                    recommend,
                     image_url,
                     summary_text,
                     created_at

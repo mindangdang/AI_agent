@@ -1,6 +1,4 @@
-import concurrent.futures
 import os
-import gc
 import torch
 import torch.nn.functional as F
 from PIL import Image
@@ -139,6 +137,12 @@ class FashionSiglipReRankingPipeline:
             clean_img = self.preprocess_image(raw_img)
             raw_img.close()
             cat = item.get("sub_category") or "PRODUCT"
+            
+            # 연산을 위해 1D 벡터가 들어왔을 경우 2D 벡터로 보정 (dim=1 연산 에러 방지)
+            if query_vector.dim() == 1:
+                query_vector = query_vector.unsqueeze(0)
+            if user_taste_vector.dim() == 1:
+                user_taste_vector = user_taste_vector.unsqueeze(0)
             
             # 1. 이미지 및 카테고리 벡터 추출
             img_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)
