@@ -81,7 +81,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
-@router.get("/`auth/me`")
+@router.get("/auth/me")
 async def get_current_user_info(current_user: dict = Depends(get_current_user), conn=Depends(get_db_connection)):
     """현재 로그인한 사용자의 정보를 반환합니다."""
     try:
