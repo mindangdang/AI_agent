@@ -17,4 +17,5 @@ transformers
 ftfy 
 open_clip_torch
 accelerate
-google-auth PyJWT
+google-auth 
+PyJWT
