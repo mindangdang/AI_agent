@@ -71,6 +71,10 @@ function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton }: Produ
   const title = getItemTitle(item);
   const facts = parseItemFacts(item);
   const priceInfo = facts?.price_info;
+  const priceText =
+    typeof priceInfo === 'string' || typeof priceInfo === 'number'
+      ? String(priceInfo)
+      : undefined;
 
   const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -144,9 +148,9 @@ function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton }: Produ
         <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
           {title || 'Untitled Item'}
         </h3>
-        {priceInfo && (
+        {priceText && (
           <p className="text-sm font-bold text-foreground">
-            {priceInfo}
+            {priceText}
           </p>
         )}
       </div>
