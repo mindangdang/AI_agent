@@ -416,17 +416,17 @@ export function SearchTabContent({
             transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
             className="relative w-full"
           >
-            <div className="absolute left-5 top-1/2 z-20 -translate-y-1/2">
+            <div className="absolute left-3 top-1/2 z-20 -translate-y-1/2">
               <button
                 type="button"
                 aria-label={activeMode ? `${activeMode.label} 모드 변경` : "검색 모드 선택"}
                 title={activeMode ? `${activeMode.label} 모드` : "검색 모드 선택"}
                 onClick={() => setIsModeMenuOpen((open) => !open)}
-                className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
-                  activeMode ? activeMode.activeClass : "text-gray-400 hover:bg-gray-100 hover:text-black group-focus-within:text-black"
+                className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                  activeMode ? activeMode.activeClass : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                <ActiveModeIcon className="h-6 w-6" />
+                <ActiveModeIcon className="h-5 w-5" />
               </button>
 
               <AnimatePresence>
@@ -436,7 +436,7 @@ export function SearchTabContent({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -8, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute left-0 top-12 flex w-44 flex-col gap-1 rounded-2xl bg-white p-1 shadow-xl ring-1 ring-black/5"
+                    className="absolute left-0 top-12 flex w-40 flex-col gap-1 rounded-xl bg-background p-1 shadow-lg border border-border"
                   >
                     {modeOptions.map(({ value, label, icon: Icon, activeClass, hoverClass }) => (
                       <button
@@ -444,11 +444,11 @@ export function SearchTabContent({
                         type="button"
                         aria-label={`${label} 모드`}
                         onClick={() => handleSelectMode(value)}
-                        className={`flex h-11 items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition-colors hover:bg-gray-100 ${
-                          activeMode?.value === value ? activeClass : `text-gray-500 ${hoverClass}`
+                        className={`flex h-10 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium transition-colors hover:bg-muted ${
+                          activeMode?.value === value ? activeClass : `text-muted-foreground ${hoverClass}`
                         }`}
                       >
-                        <Icon className="h-5 w-5" />
+                        <Icon className="h-4 w-4" />
                         <span className="whitespace-nowrap">{label}</span>
                       </button>
                     ))}
@@ -461,16 +461,16 @@ export function SearchTabContent({
               <motion.div
                 layout
                 initial={false}
-                animate={{ height: 270 }}
+                animate={{ height: 240 }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="flex w-full flex-col justify-center rounded-4xl border border-gray-900 bg-white py-0 pl-20 pr-18 shadow-lg shadow-gray-200"
+                className="flex w-full flex-col justify-center rounded-2xl border border-border bg-background py-0 pl-16 pr-16 shadow-sm"
               >
                 {detailFields.map(({ key, placeholder, suggestions }, index) => (
                   <div
                     key={key}
                     className={[
-                      "flex min-h-16 items-center gap-3",
-                      index < detailFields.length - 1 ? "border-b border-gray-200" : "",
+                      "flex min-h-14 items-center gap-3",
+                      index < detailFields.length - 1 ? "border-b border-border" : "",
                     ].join(" ")}
                   >
                     <input
@@ -478,7 +478,7 @@ export function SearchTabContent({
                       placeholder={placeholder}
                       value={detailedSearchQuery[key]}
                       onChange={(e) => setDetailedSearchQuery((prev) => ({ ...prev, [key]: e.target.value }))}
-                      className="h-full min-w-0 flex-1 bg-transparent text-base font-medium placeholder:text-gray-400 focus:outline-none"
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium placeholder:text-muted-foreground focus:outline-none"
                     />
 
                     <div className="flex w-36 shrink-0 justify-end overflow-hidden py-1 sm:w-44 md:w-52">
@@ -504,10 +504,10 @@ export function SearchTabContent({
                                     [key]: prev[key] === suggestion ? "" : suggestion,
                                   }))}
                                   className={[
-                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
+                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                                     selected
-                                      ? "border-black bg-black text-white"
-                                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-600 hover:text-gray-900",
+                                      ? "border-primary bg-primary text-primary-foreground"
+                                      : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground",
                                   ].join(" ")}
                                 >
                                   {suggestion}
@@ -525,9 +525,9 @@ export function SearchTabContent({
               <motion.div
                 layout
                 initial={false}
-                animate={{ height: 68 }}
+                animate={{ height: 56 }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full rounded-full border border-gray-900 bg-white shadow-lg shadow-gray-200"
+                className="w-full rounded-full border border-border bg-background shadow-sm"
               >
                 <input
                   type="text"
@@ -541,16 +541,16 @@ export function SearchTabContent({
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-full w-full rounded-full bg-transparent pl-20 pr-32 text-lg font-medium outline-0"
+                  className="h-full w-full rounded-full bg-transparent pl-16 pr-16 text-base font-medium placeholder:text-muted-foreground outline-0"
                 />
               </motion.div>
             )}
 
             <button
               disabled={loading || quotaCountdown !== null}
-              className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-black text-xs font-black tracking-widest  transition-all hover:bg-gray-200 disabled:opacity-50"
+              className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : quotaCountdown !== null ? `${quotaCountdown}s` : <Search/>}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : quotaCountdown !== null ? <span className="text-xs font-bold">{quotaCountdown}s</span> : <Search className="w-5 h-5" />}
             </button>
           </motion.div>
           </form>
@@ -560,7 +560,7 @@ export function SearchTabContent({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 text-sm font-bold tracking-tight max-w-3xl mx-auto"
+            className="text-center p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 text-sm font-medium max-w-3xl mx-auto"
           >
             토큰이 부족합니다. {quotaCountdown}초 뒤에 다시 시도하세요.
           </motion.div>
@@ -572,7 +572,7 @@ export function SearchTabContent({
             initial={{ opacity: 0, y: 40, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="min-h-[60vh] bg-gray-50/70 p-6 md:p-10 rounded-4xl border border-black/5 shadow-xl shadow-gray-200/60 items-center justify-center flex"
+            className="min-h-[60vh] bg-muted/50 p-6 md:p-10 rounded-2xl border border-border items-center justify-center flex"
           >
             <div className="w-full flex flex-col space-y-8">
               <AnimatePresence>
@@ -584,8 +584,8 @@ export function SearchTabContent({
                     exit={{ opacity: 0, height: 0 }}
                     className="flex flex-col items-center justify-center gap-4 py-4 overflow-hidden"
                   >
-                    <Loader2 className="w-8 h-8 animate-spin text-black" />
-                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-bold text-gray-500 animate-pulse text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-foreground" />
+                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-medium text-muted-foreground animate-pulse text-center">
                       {searchResults.length > 0
                         ? `분석 중... (현재까지 발견된 아이템: ${searchResults.length}개)`
                         : searchMode === "digging"
@@ -602,9 +602,9 @@ export function SearchTabContent({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm"
+                  className="flex flex-col items-center bg-background p-6 rounded-2xl border border-border"
                 >
-                  <span className="text-xs font-black tracking-widest uppercase text-purple-600 mb-4 flex items-center gap-2">
+                  <span className="text-xs font-bold tracking-widest uppercase text-accent mb-4 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" /> Generated Vibe
                   </span>
                   <img
@@ -612,11 +612,11 @@ export function SearchTabContent({
                     alt="AI Generated Vibe"
                     className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
                   />
-                  <p className="text-xs text-gray-400 mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                  <p className="text-xs text-muted-foreground mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
                 </motion.div>
               )}
 
-              <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              <motion.div layout className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 <AnimatePresence>
                   {searchResults.map((item, index) => (
                     <SearchResultCard
@@ -628,7 +628,7 @@ export function SearchTabContent({
                     />
                   ))}
 
-                  {loading && Array.from({ length: Math.max(3, 6 - searchResults.length) }).map((_, i) => (
+                  {loading && Array.from({ length: Math.max(5, 10 - searchResults.length) }).map((_, i) => (
                     <motion.div
                       key={`skeleton-${i}`}
                       layout
@@ -636,36 +636,26 @@ export function SearchTabContent({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9, y: 20 }}
                       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                      className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 flex flex-col h-full min-h-[360px]"
+                      className="flex flex-col"
                     >
-                      <div className="aspect-square w-full bg-gray-100 animate-pulse relative">
-                        <div className="absolute inset-0 flex items-center justify-center text-gray-300">
-                          <Zap className="w-8 h-8 opacity-20" fill="currentColor" />
-                        </div>
-                      </div>
-                      <div className="p-5 flex flex-col flex-1 gap-4">
-                        <div className="space-y-2">
-                          <div className="h-4 bg-gray-200 rounded-md w-3/4 animate-pulse" />
-                          <div className="h-4 bg-gray-200 rounded-md w-1/2 animate-pulse" />
-                        </div>
-                        <div className="h-3 bg-gray-100 rounded-md w-full animate-pulse mt-1" />
-                        <div className="mt-auto">
-                          <div className="h-10 bg-gray-50 rounded-xl animate-pulse" />
-                        </div>
+                      <div className="aspect-square w-full bg-muted rounded-xl animate-pulse mb-3" />
+                      <div className="space-y-2">
+                        <div className="h-3 bg-muted rounded w-1/3 animate-pulse" />
+                        <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
                       </div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
               </motion.div>
               {searchResults.length > 0 && (
-                <div className="flex justify-center pt-10 w-full">
+                <div className="flex justify-center pt-8 w-full">
                   <button
                     onClick={handleLoadMore}
                     disabled={loading}
-                    className="px-10 py-3 bg-white border-2 border-black text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                    className="h-11 px-8 bg-primary text-primary-foreground rounded-full text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Load More Inspiration
+                    더 보기
                   </button>
                 </div>
               )}

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Instagram, X, Zap } from 'lucide-react';
+import { ExternalLink, X, Sparkles } from 'lucide-react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -31,7 +31,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
+              className="fixed inset-0 z-50 bg-foreground/60 backdrop-blur-sm"
             />
           </Dialog.Overlay>
 
@@ -42,8 +42,9 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
             >
-              <div className="bg-white w-full max-w-4xl rounded-[3rem] overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] border border-white/20">
-                <div className="md:w-1/2 bg-gray-50 flex items-center justify-center overflow-hidden p-8">
+              <div className="bg-background w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] border border-border">
+                {/* Image Section */}
+                <div className="md:w-1/2 bg-muted flex items-center justify-center overflow-hidden p-6">
                   <img
                     src={
                       item.image_url?.startsWith('http') || 
@@ -55,7 +56,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                           : 'https://via.placeholder.com/600x600?text=No+Image'
                     }
                     alt={item.category}
-                    className="w-full h-full object-contain rounded-2xl shadow-sm"
+                    className="w-full h-full object-contain rounded-xl"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x600?text=No+Image';
@@ -63,45 +64,52 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                   />
                 </div>
 
-                <div className="md:w-1/2 p-8 md:p-10 flex flex-col bg-white">
-                  <div className="flex items-start justify-between mb-8 gap-4 border-b border-gray-100 pb-6 shrink-0">
-                    <div className="space-y-3">
-                      <span className="inline-block text-[10px] font-black uppercase tracking-widest text-white bg-black px-3 py-1.5 rounded-lg">
+                {/* Content Section */}
+                <div className="md:w-1/2 p-6 md:p-8 flex flex-col bg-background">
+                  <div className="flex items-start justify-between mb-6 gap-4 border-b border-border pb-4 shrink-0">
+                    <div className="space-y-2">
+                      <span className="inline-block text-xs font-medium uppercase tracking-wide text-accent">
                         {item.category}
                       </span>
-                      <h2 className="text-2xl md:text-3xl font-black text-black tracking-tight leading-tight break-keep">
+                      <h2 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
                         {modalTitle}
                       </h2>
                     </div>
                     <Dialog.Close asChild>
-                      <button className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0">
-                        <X className="w-6 h-6" />
+                      <button className="p-2 hover:bg-muted rounded-full transition-colors shrink-0 text-muted-foreground hover:text-foreground">
+                        <X className="w-5 h-5" />
                       </button>
                     </Dialog.Close>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-8 pr-4 custom-scrollbar">
+                  <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+                    {/* Vibe Analysis */}
                     <section>
-                      <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-yellow-400" fill="currentColor" /> Vibe Analysis
+                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-accent" /> Vibe Analysis
                       </h3>
-                      <p className="text-lg font-bold leading-relaxed text-black tracking-tight">{item.recommend}</p>
+                      <p className="text-sm font-medium leading-relaxed text-foreground">
+                        {item.recommend}
+                      </p>
                     </section>
 
+                    {/* Extracted Information */}
                     <section>
-                      <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Extracted Information</h3>
-                      <div className="grid grid-cols-1 gap-4">
+                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                        Extracted Information
+                      </h3>
+                      <div className="grid grid-cols-1 gap-3">
                         {factEntries.length > 0 ? (
                           factEntries.map(([key, value]) => (
-                            <div key={key} className="group/fact bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                              <dt className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                            <div key={key} className="bg-muted p-3 rounded-xl">
+                              <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                                 {key.replace(/_/g, ' ')}
                               </dt>
-                              <dd className="text-sm font-medium text-black">
+                              <dd className="text-sm font-medium text-foreground">
                                 {Array.isArray(value) ? (
-                                  <div className="flex flex-wrap gap-2">
+                                  <div className="flex flex-wrap gap-1.5">
                                     {value.map((val, index) => (
-                                      <span key={index} className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold shadow-sm">
+                                      <span key={index} className="px-2 py-0.5 bg-background border border-border rounded text-xs font-medium">
                                         {String(val)}
                                       </span>
                                     ))}
@@ -113,21 +121,22 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-gray-400 font-medium">No detailed facts available.</p>
+                          <p className="text-sm text-muted-foreground">No detailed facts available.</p>
                         )}
                       </div>
                     </section>
 
+                    {/* Source Link */}
                     {item.url && (
-                      <section className="pt-4">
+                      <section className="pt-2">
                         <a
                           href={item.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 w-full py-4 bg-gray-100 hover:bg-gray-200 text-black rounded-2xl text-xs font-black uppercase tracking-widest transition-colors"
+                          className="flex items-center justify-center gap-2 w-full h-11 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
                         >
-                          <Instagram className="w-4 h-4" />
-                          Open Original Post
+                          <ExternalLink className="w-4 h-4" />
+                          원본 보기
                         </a>
                       </section>
                     )}
