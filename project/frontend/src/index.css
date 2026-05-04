@@ -4,9 +4,25 @@
 @theme {
   --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Pretendard", ui-sans-serif, system-ui, sans-serif;
-  --color-primary: #781c2e;
-  --color-secondary: #a64a5f;
-  --color-tertiary: #d9a3ad;
+  --color-background: #ffffff;
+  --color-foreground: #111111;
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: #737373;
+  --color-primary: #111111;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #3b82f6;
+  --color-accent-foreground: #ffffff;
+  --color-border: #e5e5e5;
+  --color-card: #ffffff;
+  --color-card-foreground: #111111;
+}
+
+html {
+  background-color: var(--color-background);
+}
+
+body {
+  color: var(--color-foreground);
 }
 
 .markdown-body {
@@ -46,7 +62,7 @@
 }
 
 .markdown-body a {
-  @apply text-blue-500 hover:underline;
+  @apply text-accent hover:underline;
 }
 
 .feed-scroll-area {
@@ -77,4 +93,24 @@
 
 .feed-scroll-area:hover::-webkit-scrollbar-thumb:hover {
   background: rgb(156 163 175);
+}
+
+/* Hero carousel styles */
+.hero-carousel {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-slide {
+  transition: transform 0.5s ease-in-out;
+}
+
+/* Category navigation */
+.category-nav {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.category-nav::-webkit-scrollbar {
+  display: none;
 }

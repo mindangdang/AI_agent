@@ -34,74 +34,82 @@ export function FeedItemCard({
     <motion.div
       layout
       onClick={onSelect}
-      className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-2xl"
+      className="group cursor-pointer"
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="relative aspect-[4/4.6] overflow-hidden bg-gray-100">
+      {/* Image Container */}
+      <div className="relative aspect-square overflow-hidden rounded-xl bg-muted mb-3">
         <img
-          src={item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
+          src={item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x400?text=No+Image'}
           alt={item.category}
-          className="h-full w-full object-cover transform transition-transform duration-700 group-hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           referrerPolicy="no-referrer"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=POSE+Not+Found';
+            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x400?text=POSE';
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        
+        {/* Hover Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        
+        {/* Delete Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(item.id);
+          }}
+          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-red-50 shadow-sm"
+          aria-label="Delete item"
+        >
+          <Trash2 className="w-4 h-4 text-red-500" />
+        </button>
       </div>
-      <div className="flex flex-1 flex-col p-4">
-        <div className="flex items-center justify-between">
-          {isProcessingItem ? (
-            <span aria-hidden="true" />
-          ) : (
-            <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-              {categoryLabel}
-            </span>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(item.id);
-            }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-all"
-            aria-label="Delete item"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
-        <p className="mt-2 translate-y-2 text-sm font-bold leading-tight line-clamp-2 text-black">{title}</p>
 
-        <div className="mt-3 min-h-[104px] translate-y-2 border-t border-gray-100 pt-3">
-          {visibleFacts.length > 0 ? (
-            <div className="space-y-1.5">
-              {visibleFacts.map(([key, value]) => (
-                <div key={key} className="flex flex-col gap-0.5">
-                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{key.replace(/_/g, ' ')}</span>
-                  <p className="text-[11px] text-gray-600 line-clamp-1 font-medium">
-                    {Array.isArray(value) ? value.join(', ') : String(value)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex h-full items-center">
-              <p className="text-[11px] font-medium text-gray-300">No extracted details</p>
-            </div>
-          )}
-        </div>
+      {/* Content */}
+      <div className="space-y-1.5">
+        {/* Category */}
+        {!isProcessingItem && (
+          <span className="text-xs font-medium text-accent uppercase tracking-wide">
+            {categoryLabel}
+          </span>
+        )}
+        
+        {/* Title */}
+        <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
+          {title}
+        </h3>
 
-        <div className="mt-auto pt-3 flex items-center gap-2">
+        {/* Facts */}
+        {visibleFacts.length > 0 && (
+          <div className="pt-2 space-y-1">
+            {visibleFacts.slice(0, 2).map(([key, value]) => (
+              <div key={key} className="flex flex-col">
+                <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                  {key.replace(/_/g, ' ')}
+                </span>
+                <p className="text-xs font-medium text-foreground line-clamp-1">
+                  {Array.isArray(value) ? value.join(', ') : String(value)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Source */}
+        <div className="pt-2">
           {item.url && item.url.startsWith('http') ? (
             <a
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-[10px] font-bold text-gray-400 hover:text-black flex items-center gap-1 transition-colors"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <Instagram className="w-3 h-3" /> View Source
             </a>
           ) : (
-            <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <Sparkles className="w-3 h-3" /> AI Curated
             </span>
           )}

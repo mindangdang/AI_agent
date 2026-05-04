@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Zap, Folder, ArrowLeft, Grid3X3, Clock3, Package, X, Check } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type FormEvent, type WheelEvent } from 'react';
+import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -42,7 +42,6 @@ export function FeedTabContent({
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
-  const menuWheelDelta = useRef(0);
   const addSuccessTimeout = useRef<number | null>(null);
 
   useEffect(() => {
@@ -114,21 +113,14 @@ export function FeedTabContent({
           const data = JSON.parse(event.data);
           
           if (data.type === "CRAWL_SUCCESS") {
-            console.log("[웹소켓] CRAWL_SUCCESS 메시지 수신: ", data);
-            // 웹소켓으로부터 최종 아이템 데이터를 받으면, 기존의 임시 아이템을 제거하고 새 아이템으로 교체합니다.
             onItemsChange((prev) => {
-              // placeholder_id와 일치하는 임시 아이템을 찾아서 제거합니다.
               const filtered = prev.filter(item => item.id !== data.placeholder_id);
-              console.log("id 일치여부 확인: ", prev.map(item => ({ id: item.id, placeholder_id: data.placeholder_id })));
-              // 새로 받은 최종 아이템(data.items)을 배열의 맨 앞에 추가합니다.
               return [...(data.items || []), ...filtered];
             });
-            // 전체 아이템을 다시 불러올 필요 없이, 취향 분석만 새로고침합니다.
             setCurrentFolder((prev) => prev === 'PROCESSING ' ? null : prev);
             void refreshTaste();
           } else if (data.type === "CRAWL_ERROR") {
             alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
-            // 에러 발생 시, 해당 임시 아이템을 피드에서 제거합니다.
             onItemsChange((prev) => prev.filter(item => item.id !== data.placeholder_id));
           }
         } catch (err) {
@@ -167,16 +159,11 @@ export function FeedTabContent({
       };
     },
     onSuccess: ({ data }) => {
-      // 백그라운드 작업이 시작되면, 백엔드는 임시 아이템 정보를 응답으로 보내줍니다.
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        // 이 임시 아이템을 UI에 먼저 표시하여 사용자에게 작업이 진행 중임을 알립니다.
         onItemsChange((prev) => [...data.data, ...prev]);
       }
-      // 입력 필드를 초기화합니다.
       setNewUrl("");
       setSessionId("");
-      // 여기서는 refreshItems()를 호출하지 않습니다.
-      // 최종 데이터는 웹소켓을 통해 받아와 상태를 업데이트할 것이기 때문입니다.
     },
     onError: (error: Error) => {
       console.error(error);
@@ -233,7 +220,6 @@ export function FeedTabContent({
     const normalizedCategory = category.toUpperCase();
     if (normalizedCategory === 'ALL') return Grid3X3;
     if (normalizedCategory === 'PROCESSING') return Clock3;
-    if (normalizedCategory === 'PRODUCT') return Folder;
     return Folder;
   };
 
@@ -242,55 +228,74 @@ export function FeedTabContent({
     return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
   };
 
-  const handleCategoryWheel = (event: WheelEvent<HTMLElement>) => {
-    if (categories.length < 2) return;
-
-    event.preventDefault();
-
-    menuWheelDelta.current += event.deltaY;
-
-    const wheelStep = 80;
-    const steps = Math.trunc(Math.abs(menuWheelDelta.current) / wheelStep);
-    if (steps === 0) return;
-
-    const currentIndex = Math.max(0, categories.indexOf(selectedCategory));
-    const direction = menuWheelDelta.current > 0 ? 1 : -1;
-    const nextIndex = Math.max(0, Math.min(categories.length - 1, currentIndex + direction * steps));
-
-    menuWheelDelta.current = nextIndex === 0 || nextIndex === categories.length - 1
-      ? 0
-      : menuWheelDelta.current % wheelStep;
-    setSelectedCategory(categories[nextIndex]);
-    setCurrentFolder(null);
-  };
-
   return (
     <motion.div
       key="feed"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex h-full min-h-0 flex-col"
+      className="flex flex-col min-h-[calc(100vh-200px)]"
     >
-      <header className="shrink-0 pr-10 -translate-x-1">
-        <div>
-          <h2 className="text-4xl justify-center flex font-black tracking-tighter"><Zap fill='black'></Zap></h2>
-          <AnimatePresence mode="wait">
-            <motion.p
-              key={quoteIndex}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="mx-auto mt-1 flex max-w-3xl justify-center text-center text-gray-500 font-medium"
-            >
-              {feedQuotes[quoteIndex]}
-            </motion.p>
-          </AnimatePresence>
+      {/* Header Section */}
+      <header className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <span className="text-accent text-xs font-bold tracking-widest uppercase">MY COLLECTION</span>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">내 피드</h1>
+          </div>
+          <button
+            onClick={() => setIsAddPanelOpen(true)}
+            className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <Plus className="w-4 h-4" />
+            아이템 추가
+          </button>
         </div>
+
+        {/* Quote */}
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={quoteIndex}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="text-muted-foreground font-medium italic"
+          >
+            {feedQuotes[quoteIndex]}
+          </motion.p>
+        </AnimatePresence>
       </header>
 
-      <div className="feed-scroll-area mt-8 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-10 pt-1">
+      {/* Category Tabs */}
+      <nav className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 category-nav">
+        {categories.map((category) => {
+          const Icon = getCategoryIcon(category);
+          const label = getCategoryLabel(category);
+          const isSelected = selectedCategory === category;
+
+          return (
+            <button
+              key={category}
+              onClick={() => {
+                setSelectedCategory(category);
+                setCurrentFolder(null);
+              }}
+              className={`flex items-center gap-2 h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                isSelected
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Items Grid */}
+      <div className="flex-1">
         <AnimatePresence mode="wait">
           <motion.div
             key={`${selectedCategory}-${currentFolder ?? 'root'}`}
@@ -298,37 +303,42 @@ export function FeedTabContent({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
           >
+            {/* Current Folder Header */}
             {currentFolder && (
-              <div className="col-span-full mb-5 flex items-center gap-4 border-b border-black/20 pb-2">
-                <h3 className="pl-2 text-xl font-bold uppercase tracking-tight text-gray-800">{currentFolder}</h3>
+              <div className="col-span-full mb-4 flex items-center gap-4 border-b border-border pb-3">
+                <h3 className="text-lg font-bold text-foreground">{currentFolder}</h3>
                 <button
                   onClick={() => setCurrentFolder(null)}
-                  className="ml-auto flex items-center px-2 py-2 hover:bg-gray-200 rounded-full text-xs font-black tracking-widest transition-colors"
+                  className="ml-auto flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
+                  닫기
                 </button>
               </div>
             )}
 
+            {/* Folder Cards */}
             {!currentFolder && selectedCategory !== 'All' &&
               folders.map((folder) => (
                 <motion.div
                   layout
                   key={`folder-${folder}`}
                   onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-[4/4.6] flex-col items-center justify-center overflow-hidden rounded-3xl border border-black/60 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
+                  className="group relative flex aspect-square flex-col items-start justify-end p-4 overflow-hidden rounded-xl border border-border bg-muted transition-all duration-300 cursor-pointer hover:border-foreground/20 hover:shadow-lg"
                 >
-                  <h3 className="absolute left-5 top-5 pr-5 text-sm font-bold text-black group-hover:text-black tracking-widest line-clamp-2">
+                  <Folder className="absolute top-4 right-4 w-6 h-6 text-muted-foreground" />
+                  <h3 className="text-sm font-bold text-foreground line-clamp-2">
                     {folder}
                   </h3>
-                  <p className="absolute bottom-5 right-5 text-xl font-medium text-black">
-                    [ {filteredItems.filter((i) => i.sub_category === folder).length} ]
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {filteredItems.filter((i) => i.sub_category === folder).length} items
                   </p>
                 </motion.div>
               ))}
 
+            {/* Item Cards */}
             {itemsToDisplay.map((item) => (
               <FeedItemCard
                 key={item.id}
@@ -341,58 +351,25 @@ export function FeedTabContent({
           </motion.div>
         </AnimatePresence>
 
+        {/* Empty State */}
         {items.length === 0 && !addItemMutation.isPending && (
-          <div className="text-center py-32 h-full flex flex-col justify-center itemms-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-            <h3 className="text-2xl font-black tracking-tight mb-2">POSE!</h3>
-            <p className="text-gray-500 font-medium">아이템 링크를 넣고 나만의 바이브를 수집하세요.</p>
+          <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
+            <h3 className="text-xl font-bold text-foreground mb-2">POSE</h3>
+            <p className="text-muted-foreground font-medium mb-4">
+              아이템 링크를 넣고 나만의 바이브를 수집하세요.
+            </p>
+            <button
+              onClick={() => setIsAddPanelOpen(true)}
+              className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <Plus className="w-4 h-4" />
+              첫 아이템 추가하기
+            </button>
           </div>
         )}
       </div>
 
-      <nav
-        className="fixed right-40 bottom-70 md:right-48 top-1/2 z-30 flex -translate-y-1/2 flex-col items-stretch gap-18"
-        aria-label="Feed category filters"
-        onWheel={handleCategoryWheel}
-      >
-        {categories.map((category) => {
-          const Icon = getCategoryIcon(category);
-          const label = getCategoryLabel(category);
-          const isSelected = selectedCategory === category;
-
-          return (
-            <button
-              key={category}
-              type="button"
-              title={category}
-              aria-label={`Show ${category} feed items`}
-              aria-pressed={isSelected}
-              onClick={() => {
-                setSelectedCategory(category);
-                setCurrentFolder(null);
-              }}
-              className={[
-                "flex h-10 min-w-28 items-center gap-2 px-3 text-sm font-bold normal-case transition-colors",
-                isSelected
-                  ? "text-black"
-                  : "text-gray-300 hover:text-gray-600",
-              ].join(' ')}
-            >
-              <Icon className="h-6 w-6" />
-              <span>{label}</span>
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          aria-label="Open add form"
-          aria-expanded={isAddPanelOpen}
-          onClick={() => setIsAddPanelOpen(true)}
-          className="mt-35 ml-3.5 left-10 flex p-2 w-25 cursor-pointer rounded-4xl justify-center items-center gap-2 px-3 text-sm font-bg-gray-700 transition-colors hover:text-gray-400"
-        >
-          <Plus className="h-10 w-10" strokeWidth={1}/>
-        </button>
-      </nav>
-
+      {/* Add Item Modal */}
       <AnimatePresence>
         {isAddPanelOpen && (
           <>
@@ -401,7 +378,7 @@ export function FeedTabContent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/40"
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
               onClick={() => setIsAddPanelOpen(false)}
             />
             <motion.div
@@ -412,48 +389,50 @@ export function FeedTabContent({
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="w-[min(calc(100vw-3rem),24rem)] rounded-[1.75rem] border border-gray-100 bg-white px-4 pb-4 pt-2 shadow-xl">
-                <div className="flex h-10 items-center justify-end">
+              <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-foreground">새 아이템 추가하기</h3>
                   <button
-                    type="button"
-                    aria-label="Close add form"
                     onClick={() => setIsAddPanelOpen(false)}
-                    className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-gray-500 transition-colors hover:text-black"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   >
-                    <Plus className="h-4.5 w-4.5 rotate-45" />
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <h3 className="-mt-4 mb-5 px-1 text-lg font-black tracking-tight text-black">새 아이템 추가하기</h3>
-
-                <form onSubmit={handleAddItem} className="mt-1 space-y-3">
-                  <div className="space-y-1.5">
+                <form onSubmit={handleAddItem} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">
+                      URL 또는 제품명
+                    </label>
                     <input
                       type="url"
-                      placeholder="URL 또는 제품명"
+                      placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full rounded-2xl border-none outline-none bg-gray-100 px-4 py-2.5 text-sm font-medium transition-all"
+                      className="w-full h-11 px-4 bg-muted rounded-lg text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">
+                      Session ID (선택)
+                    </label>
                     <input
                       type="password"
                       placeholder="Session ID"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full rounded-2xl border-none outline-none bg-gray-100 px-4 py-2.5 text-sm font-medium transition-all"
+                      className="w-full h-11 px-4 bg-muted rounded-lg text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
-                    className={[
-                      "mt-8 flex h-11 w-full items-center justify-center rounded-2xl px-6 text-sm font-black tracking-widest text-white",
+                    className={`w-full h-11 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
                       isAddButtonSuccess
-                        ? "bg-green-400 opacity-100 hover:bg-green-300 disabled:opacity-100"
-                        : "bg-black hover:bg-gray-800 disabled:opacity-50",
-                    ].join(' ')}
+                        ? 'bg-green-500 text-primary-foreground'
+                        : 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50'
+                    }`}
                   >
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.span
@@ -462,22 +441,22 @@ export function FeedTabContent({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -3 }}
                         transition={{ duration: 0.12, ease: 'easeOut' }}
-                        className="flex min-w-28 items-center justify-center gap-2"
+                        className="flex items-center gap-2"
                       >
                         {addItemMutation.isPending ? (
                           <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            ADD
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            추가 중...
                           </>
                         ) : isAddButtonSuccess ? (
                           <>
-                            <Check className="h-4 w-4" />
+                            <Check className="w-4 h-4" />
                             추가 완료!
                           </>
                         ) : (
                           <>
-                            <Plus className="h-4 w-4" />
-                            ADD
+                            <Plus className="w-4 h-4" />
+                            추가하기
                           </>
                         )}
                       </motion.span>

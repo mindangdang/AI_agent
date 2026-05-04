@@ -226,27 +226,25 @@ function buildTasteProfileSections(taste: string): TasteProfileSection[] {
 
 function ProfileHeader({ user }: ProfileHeaderProps) {
   return (
-    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 border-b border-black/10 pb-12">
-      <div className="space-y-5">
-        <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-blue-600 via-yellow-300 to-purple-600 p-[3px] shadow-2xl">
-          <div className="w-full h-full bg-white rounded-full flex items-center justify-center overflow-hidden">
-            <User className="w-12 h-12 text-black" />
+    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 border-b border-border pb-8">
+      <div className="space-y-4">
+        <div className="w-20 h-20 rounded-full bg-muted p-0.5">
+          <div className="w-full h-full bg-background rounded-full flex items-center justify-center overflow-hidden">
+            <User className="w-10 h-10 text-foreground" />
           </div>
         </div>
         <div className="space-y-1">
-          <h2 className="text-5xl font-black tracking-tighter text-black uppercase">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
             {user?.username || 'Anonymous'}
           </h2>
-          <p className="text-xs font-black text-gray-400 uppercase tracking-widest bg-gray-100 inline-block px-3 py-1 rounded-full">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide bg-muted inline-block px-3 py-1 rounded-full">
             POSE Creator No. {user?.id || '000'}
           </p>
         </div>
       </div>
       <div className="text-left md:text-right max-w-xs">
-        <p className="text-2xl font-black text-black leading-tight tracking-tighter uppercase bg-clip-text text-transparent bg-gradient-to-r from-black to-gray-500">
-          "My Vibe is
-          <br />
-          my POSE."
+        <p className="text-xl font-bold text-foreground leading-tight">
+          My Vibe is my POSE
         </p>
       </div>
     </div>
@@ -389,14 +387,14 @@ function EmptyTasteState({
   onGoToFeed,
 }: EmptyTasteStateProps) {
   return (
-    <div className="py-24 bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center text-center space-y-8 px-4 border-2 border-dashed border-gray-200">
-      <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm">
-        <Sparkles className="w-8 h-8 text-yellow-400" fill="currentColor" />
+    <div className="py-20 bg-muted rounded-2xl flex flex-col items-center justify-center text-center space-y-6 px-4 border-2 border-dashed border-border">
+      <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center">
+        <Sparkles className="w-7 h-7 text-accent" />
       </div>
 
       {hasItems ? (
-        <div className="space-y-6 flex flex-col items-center">
-          <p className="text-gray-500 font-bold text-lg max-w-sm">
+        <div className="space-y-4 flex flex-col items-center">
+          <p className="text-muted-foreground font-medium text-base max-w-sm">
             충분한 영감이 모였습니다.
             <br />
             당신의 무의식적인 패턴을 꺼내볼까요?
@@ -404,25 +402,25 @@ function EmptyTasteState({
           <button
             onClick={onGenerateTaste}
             disabled={isGeneratingTaste}
-            className="px-10 py-4 bg-black text-white rounded-full text-sm font-black tracking-widest uppercase hover:bg-gray-800 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50 shadow-xl"
+            className="h-11 px-6 bg-primary text-primary-foreground rounded-full text-sm font-bold hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
           >
             {isGeneratingTaste ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Zap className="w-5 h-5 text-yellow-400" fill="currentColor" />
+              <Zap className="w-4 h-4" />
             )}
-            {isGeneratingTaste ? 'Analyzing POSE...' : 'Analyze My POSE'}
+            {isGeneratingTaste ? '분석 중...' : '내 취향 분석하기'}
           </button>
         </div>
       ) : (
-        <div className="space-y-6 flex flex-col items-center">
-          <p className="text-gray-400 font-bold text-lg">아직 수집된 영감이 없습니다.</p>
+        <div className="space-y-4 flex flex-col items-center">
+          <p className="text-muted-foreground font-medium">아직 수집된 영감이 없습니다.</p>
           <button
             type="button"
             onClick={onGoToFeed}
-            className="px-8 py-3 bg-white border-2 border-gray-200 text-black rounded-full text-xs font-black uppercase tracking-widest hover:border-black transition-all"
+            className="h-10 px-6 bg-background border border-border text-foreground rounded-full text-sm font-medium hover:bg-muted transition-colors"
           >
-            Explore Feed
+            피드 탐색하기
           </button>
         </div>
       )}
@@ -442,25 +440,25 @@ function getProfileImageUrl(item: SavedItem) {
 
 function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridProps) {
   return (
-    <div className="space-y-8 pt-12">
-      <div className="flex items-center justify-between border-b border-black/5 pb-6">
-        <h4 className="text-xl font-black uppercase tracking-tighter text-black">
-          Recent Inspirations
+    <div className="space-y-6 pt-8">
+      <div className="flex items-center justify-between border-b border-border pb-4">
+        <h4 className="text-lg font-bold text-foreground">
+          최근 영감
         </h4>
-        <div className="text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-full">
+        <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
           {items.length} Items
-        </div>
+        </span>
       </div>
       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {items.slice(0, 12).map((item) => (
           <div
             key={item.id}
-            className="aspect-square bg-gray-100 overflow-hidden cursor-pointer group relative rounded-2xl"
+            className="aspect-square bg-muted overflow-hidden cursor-pointer group relative rounded-xl"
             onClick={() => onSelectItem(item)}
           >
             <img
               src={getProfileImageUrl(item)}
-              className="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110"
+              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-300 group-hover:scale-105"
               referrerPolicy="no-referrer"
               onError={(e) => {
                 (e.target as HTMLImageElement).src =
@@ -574,7 +572,7 @@ export function ProfileTabContent({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-4xl mx-auto space-y-16 py-8"
+      className="max-w-4xl mx-auto space-y-10"
     >
       <ProfileHeader user={user} />
 

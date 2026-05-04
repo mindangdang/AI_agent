@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { Plus } from 'lucide-react';
 
 import { getItemTitle } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -21,14 +22,16 @@ export function SearchResultCard({
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 30, scale: 0.9 }}
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9, y: 20 }}
-      transition={{ delay, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       onClick={onClick}
-      className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-100 flex flex-col h-full"
+      className="group cursor-pointer"
+      whileHover={{ y: -4 }}
     >
-      <div className="aspect-square w-full bg-gray-100 overflow-hidden relative">
+      {/* Image Container */}
+      <div className="relative aspect-square w-full bg-muted rounded-xl overflow-hidden mb-3">
         {item.image_url ? (
           <img
             src={item.image_url}
@@ -40,32 +43,39 @@ export function SearchResultCard({
             }}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold bg-gray-50">
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs font-bold">
             No Image
           </div>
         )}
-        <div className="absolute top-3 left-3">
-          <span className="inline-block text-[10px] font-black uppercase tracking-widest text-white bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-lg">
-            {item.category}
-          </span>
-        </div>
+        
+        {/* Hover Overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+        
+        {/* Save Button */}
+        <button
+          onClick={(e) => onSave(e, item)}
+          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-primary hover:text-primary-foreground shadow-sm"
+          aria-label="Save to feed"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </div>
 
-      <div className="p-5 flex flex-col flex-1">
-        <h3 className="font-bold text-black text-sm line-clamp-2 mb-2 leading-snug">
+      {/* Content */}
+      <div className="space-y-1">
+        {item.category && (
+          <span className="text-xs font-medium text-accent uppercase tracking-wide">
+            {item.category}
+          </span>
+        )}
+        <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
           {title}
         </h3>
-        <p className="text-xs text-gray-500 line-clamp-2 mb-4">
-          {item.summary_text}
-        </p>
-        <div className="mt-auto">
-          <button
-            onClick={(e) => onSave(e, item)}
-            className="w-full py-2.5 bg-gray-50 hover:bg-black hover:text-white text-black rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-          >
-            + 피드에 저장
-          </button>
-        </div>
+        {item.summary_text && (
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {item.summary_text}
+          </p>
+        )}
       </div>
     </motion.div>
   );
