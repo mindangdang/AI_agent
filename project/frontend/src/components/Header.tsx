@@ -1,13 +1,10 @@
-import { Search, ChevronDown, Menu, X } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import type { AppUser } from '../types/user';
 
 type HeaderProps = {
   user: AppUser | null;
   onLogout: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  onSearchSubmit: () => void;
   currentTab: string;
   onTabChange: (tab: 'feed' | 'search' | 'profile') => void;
 };
@@ -21,19 +18,10 @@ const categories = [
 export function Header({
   user,
   onLogout,
-  searchQuery,
-  onSearchChange,
-  onSearchSubmit,
   currentTab,
   onTabChange,
 }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      onSearchSubmit();
-    }
-  };
 
   return (
     <header className="sticky top-0 z-50 bg-background border-b border-border">
@@ -43,21 +31,6 @@ export function Header({
         <a href="/" className="flex items-center gap-2 shrink-0">
           <span className="text-2xl font-black tracking-tight text-foreground">POSE</span>
         </a>
-
-        {/* Search Bar - Desktop */}
-        <div className="hidden md:flex flex-1 max-w-xl mx-8">
-          <div className="relative w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="상품, 브랜드 및 유저 검색"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              className="w-full h-11 pl-12 pr-4 bg-muted rounded-full text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
-            />
-          </div>
-        </div>
 
         {/* Right Navigation - Desktop */}
         <nav className="hidden md:flex items-center gap-6">
@@ -118,21 +91,6 @@ export function Header({
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-16 left-0 right-0 bg-background border-b border-border shadow-lg">
-          {/* Mobile Search */}
-          <div className="p-4">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="상품, 브랜드 및 유저 검색"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                className="w-full h-11 pl-12 pr-4 bg-muted rounded-full text-sm font-medium placeholder:text-muted-foreground focus:outline-none"
-              />
-            </div>
-          </div>
-
           {/* Mobile Categories */}
           <nav className="border-t border-border">
             {categories.map((category) => (

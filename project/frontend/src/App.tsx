@@ -14,7 +14,6 @@ import type { AppUser } from './types/user';
 function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const { items, setItems, refreshItems } = useItems(user);
@@ -26,12 +25,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
     onLogout();
   };
 
-  const handleSearchSubmit = () => {
-    if (searchQuery.trim()) {
-      setCurrentTab('search');
-    }
-  };
-
   const handleLogoutClick = () => {
     setIsLogoutModalOpen(true);
   };
@@ -41,9 +34,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
       <Header
         user={user}
         onLogout={handleLogoutClick}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={handleSearchSubmit}
         currentTab={currentTab}
         onTabChange={setCurrentTab}
       />
