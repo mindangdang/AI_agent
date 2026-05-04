@@ -617,11 +617,11 @@ export function SearchTabContent({
               )}
 
               <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                <AnimatePresence mode="popLayout">
-                  {searchResults.map((item) => (
+                <AnimatePresence>
+                  {searchResults.map((item, index) => (
                     <SearchResultCard
                       key={item.id}
-                      delay={0}
+                      delay={0.05 * (index % 12)}
                       item={item}
                       onClick={() => setSelectedItem(item)}
                       onSave={handleSaveToFeed}
@@ -634,8 +634,8 @@ export function SearchTabContent({
                       layout
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.3 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                       className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 flex flex-col h-full min-h-[360px]"
                     >
                       <div className="aspect-square w-full bg-gray-100 animate-pulse relative">
@@ -657,19 +657,19 @@ export function SearchTabContent({
                   ))}
                 </AnimatePresence>
               </motion.div>
+              {searchResults.length > 0 && (
+                <div className="flex justify-center pt-10 w-full">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loading}
+                    className="px-10 py-3 bg-white border-2 border-black text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Load More Inspiration
+                  </button>
+                </div>
+              )}
             </div>
-            {searchResults.length > 0 && (
-              <div className="flex justify-center pt-10">
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loading}
-                  className="px-10 py-3 bg-white border-2 border-black text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Load More Inspiration
-                </button>
-              </div>
-            )}
           </motion.div>
         )}
       </motion.div>

@@ -4,6 +4,7 @@ import asyncio
 import io
 import traceback
 import json
+import random
 from PIL import Image
 import httpx
 from pathlib import Path
@@ -173,6 +174,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
             try:
                 site_items = await fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
                 if isinstance(site_items, list) and site_items:
+                    random.shuffle(site_items)
                     if user_taste_vector is not None:
                         eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
                         await asyncio.gather(*eval_tasks, return_exceptions=True)
