@@ -173,17 +173,15 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
                 site_items = await fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
-                if isinstance(site_items, list) and site_items:
-                    random.shuffle(site_items)
-                    if user_taste_vector is not None:
-                        eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
-                        await asyncio.gather(*eval_tasks, return_exceptions=True)
-                    else:
-                        print(f"[{name}] 취향 벡터가 없어 평가 없이 즉시 프론트로 전송: {len(site_items)}개")
-                        if manager:
-                            payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
-                            await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                            await asyncio.sleep(0.01)
+                if user_taste_vector is not None:
+                    eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
+                    await asyncio.gather(*eval_tasks, return_exceptions=True)
+                else:
+                    print(f"[{name}] 취향 벡터가 없어 평가 없이 즉시 프론트로 전송: {len(site_items)}개")
+                    if manager:
+                        payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
+                        await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                        await asyncio.sleep(0.01)
             except Exception as e:
                 print(f"쇼핑몰 검색 스트리밍 처리 에러: {e}")
 
@@ -191,7 +189,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         # 모든 이미지 다운로드를 위한 단일 HTTP/2 클라이언트를 공유하여 속도 개선
         async with httpx.AsyncClient(timeout=60.0) as client:
             site_tasks = [asyncio.create_task(process_site(domain, name, client)) for domain, name in domain_map.items()]
-            await asyncio.gather(*site_tasks)
+            await asyncio.gather(*site_tasks, return_exceptions=True)
             
         print("모든 쇼핑몰 검색 및 스트리밍 완료.")
         

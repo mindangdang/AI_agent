@@ -66,7 +66,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                 image_url = item.get("image_url") or item.get("local_path") or ""
 
                 # 이미지 벡터 추출
-                vector_list = await _extract_vector_sync(image_url, sub_category or category)
+                vector_list = await _extract_vector_sync(image_url, sub_category)
                 vector_str = str(vector_list) if vector_list else None
                 
                 batch_data.append((
