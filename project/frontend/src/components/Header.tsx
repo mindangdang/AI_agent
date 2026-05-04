@@ -61,18 +61,6 @@ export function Header({
 
         {/* Right Navigation - Desktop */}
         <nav className="hidden md:flex items-center gap-6">
-          <button
-            onClick={() => onTabChange('search')}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            마켓
-          </button>
-          <button
-            onClick={() => onTabChange('feed')}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            피드
-          </button>
           {user ? (
             <>
               <span className="text-sm font-medium text-foreground">
@@ -95,9 +83,6 @@ export function Header({
               </button>
             </>
           )}
-          <button className="h-9 px-4 bg-primary text-primary-foreground text-sm font-bold rounded-full hover:opacity-90 transition-opacity">
-            Download App
-          </button>
         </nav>
 
         {/* Mobile Menu Button */}

@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleLoginButton } from './components/GoogleLoginButton';
 import { Header } from './components/Header';
-import { HeroCarousel } from './components/HeroCarousel';
-import { ProductGrid } from './components/ProductGrid';
 import { FeedTabContent } from './components/FeedTabContent';
 import { ItemDetailDialog } from './components/ItemDetailDialog';
 import { SearchTabContent } from './components/SearchTabContent';
@@ -59,43 +57,14 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
+              className="max-w-[1400px] mx-auto px-4 lg:px-8 py-8"
             >
-              {/* Hero Carousel - only show when no search activity */}
-              <HeroCarousel />
-
-              {/* Popular Items Section */}
-              {items.length > 0 && (
-                <ProductGrid
-                  label="POPULAR LISTINGS"
-                  title="인기 상품"
-                  items={items.slice(0, 12)}
-                  onSelectItem={setSelectedItem}
-                  onDeleteItem={async (id) => {
-                    const token = localStorage.getItem('access_token');
-                    try {
-                      const res = await fetch(`/api/items/${id}?user_id=${user.id}`, {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
-                      if (res.ok) {
-                        setItems((prev) => prev.filter((item) => item.id !== id));
-                      }
-                    } catch (error) {
-                      console.error('Delete failed:', error);
-                    }
-                  }}
-                />
-              )}
-
-              {/* Search Section */}
-              <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-8">
-                <SearchTabContent
-                  onItemsChange={setItems}
-                  refreshItems={refreshItems}
-                  refreshTaste={refreshTaste}
-                  user={user}
-                />
-              </div>
+              <SearchTabContent
+                onItemsChange={setItems}
+                refreshItems={refreshItems}
+                refreshTaste={refreshTaste}
+                user={user}
+              />
             </motion.div>
           )}
 
