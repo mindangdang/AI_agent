@@ -1,6 +1,7 @@
 import asyncio
 import io
 import httpx
+import math
 from PIL import Image
 
 # GPU 서버의 파이프라인 클래스 임포트
@@ -96,6 +97,14 @@ async def run_test():
                 evaluated_items.append(result)
         except Exception as e:
             print(f"테스트 이미지 평가 실패 ({img_url}): {e}")
+
+    if evaluated_items:
+        avg_semantic = sum(item["semantic_score"] for item in evaluated_items) / len(evaluated_items)
+        avg_aesthetic = sum(item["aesthetic_score"] for item in evaluated_items) / len(evaluated_items)
+        
+        for item in evaluated_items:
+            item["semantic_score"] = math.exp(item["semantic_score"] - avg_semantic)
+            item["aesthetic_score"] = math.exp(item["aesthetic_score"] - avg_aesthetic)
 
     # =====================================================================
     # 4. 결과 정렬 및 출력

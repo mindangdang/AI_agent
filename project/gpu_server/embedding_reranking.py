@@ -51,6 +51,13 @@ class FashionSiglipReRankingPipeline:
             print("모델 웜업 완료.")
         except Exception as e:
             print(f"모델 웜업 중 에러 발생 (무시됨): {e}")
+        
+        print("User Vector 합성을 위한 Attention 레이어 로드 중...")
+        # 768차원 벡터를 8개의 Head로 나누어 다각도로 공통점을 찾습니다.
+        self.attention = torch.nn.MultiheadAttention(embed_dim=768, num_heads=8, batch_first=True).to(self.device)
+        if self.device == "cuda":
+            self.attention = self.attention.to(torch.bfloat16)
+        print("Attention 레이어 로드 완료.")
 
         self._is_initialized = True
         print(f"시스템 초기화 완료. (동작 환경: {self.device})")
@@ -86,30 +93,42 @@ class FashionSiglipReRankingPipeline:
         return image_vector[0].tolist()
 
     @torch.no_grad()
-    def build_user_taste_vector(self, image_vectors: list[list[float]]) -> torch.Tensor:
-        """사전 추출된 위시리스트 벡터 배열에서 SVD(PCA)를 통해 지배적인 미학 축(Taste Vector) 추출"""
-        print("위시리스트 취향 벡터 합성(PCA) 중...")
-        if not image_vectors:
+    def build_user_taste_vector(self, pure_vibe_vectors: list[list[float]]) -> torch.Tensor:
+        if not pure_vibe_vectors:
             return None
             
-        wishlist_tensor = torch.tensor(image_vectors, device=self.device)
+        # 1. N개의 무드 벡터를 PyTorch 텐서로 변환: Shape (N, 768)
+        vibe_tensor = torch.tensor(pure_vibe_vectors, device=self.device)
         if self.device == "cuda":
-            wishlist_tensor = wishlist_tensor.to(torch.bfloat16)
-        
-        if wishlist_tensor.size(0) == 1:
-            return wishlist_tensor
+            vibe_tensor = vibe_tensor.to(torch.bfloat16)
             
-        mean_vec = torch.mean(wishlist_tensor, dim=0, keepdim=True)
-        centered_vectors = wishlist_tensor - mean_vec
+        # 아이템이 1개뿐이라면 어텐션이 무의미하므로 바로 반환
+        if vibe_tensor.size(0) == 1:
+            return F.normalize(vibe_tensor, p=2, dim=1)
+
+        # 2. Attention 연산을 위해 Batch 차원 추가: Shape (1, N, 768)
+        vibe_batch = vibe_tensor.unsqueeze(0)
         
-        U, S, Vh = torch.linalg.svd(centered_vectors.to(torch.float32), full_matrices=False)
-        first_pc = Vh[0, :].unsqueeze(0).to(self.device)
+        # 3. Self-Attention 실행 (Query, Key, Value 모두 자신의 위시리스트)
+        # 각 옷이 다른 옷들을 바라보며 "나와 비슷한 무드"에만 높은 가중치를 부여합니다.
+        attn_output, attn_weights = self.attention(
+            query=vibe_batch, 
+            key=vibe_batch, 
+            value=vibe_batch
+        )
+        # attn_output Shape: (1, N, 768)
         
-        if self.device == "cuda":
-            first_pc = first_pc.to(torch.bfloat16)
+        # 4. 잔차 연결 (Residual Connection) - 트랜스포머의 정석
+        # 원본 무드와 어텐션으로 증폭된 무드를 더해줍니다.
+        contextualized_vibes = vibe_batch + attn_output
         
-        taste_vector = mean_vec + (0.5 * first_pc)
-        return F.normalize(taste_vector, p=2, dim=1)
+        # 5. 최종 결합: 이제 단순 평균(Mean)을 내도 안전합니다.
+        # 왜냐하면 어텐션을 통해 '서로 공통점이 없는 특이값(Outlier)'은 이미 억제되었고,
+        # '공통된 무드'만 수치적으로 증폭되었기 때문입니다.
+        consensus_vector = torch.mean(contextualized_vibes.squeeze(0), dim=0, keepdim=True)
+        
+        # 6. 크기를 1로 맞춰 코사인 유사도 연산이 가능하게 정규화
+        return F.normalize(consensus_vector, p=2, dim=1)
     
     def encode_text(self, text: str) -> torch.Tensor:
         """쿼리 텍스트를 SigLIP 텍스트 임베딩으로 인코딩"""
@@ -127,8 +146,8 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_vector: torch.Tensor,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0.10, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170 취향벡터
-        aesthetic_thresh: float = 0.0
+        semantic_thresh: float = 0.05, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170 취향벡터
+        aesthetic_thresh: float = 0.5
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
         raw_img = item.pop("image_obj", None)
